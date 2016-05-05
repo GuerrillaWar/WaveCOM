@@ -52,6 +52,7 @@ function UpdateActiveUnit()
 	local XComGameState_Unit Unit;
 	local XComGameState NewGameState;
 	local Vector SpawnLocation;
+	local XGUnit Visualizer;
 	local XComGameStateHistory History;
 	local StateObjectReference ItemReference;
 	local XComGameState_Item ItemState;
@@ -102,7 +103,9 @@ function UpdateActiveUnit()
 	XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = Unit.GetReference();
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 
+	Visualizer = XGUnit(Unit.GetVisualizer());
 	Unit.SyncVisualizer(NewGameState);
+	XComHumanPawn(Visualizer.GetPawn()).SetAppearance(Unit.kAppearance);
 }
 
 simulated function OnCancel()

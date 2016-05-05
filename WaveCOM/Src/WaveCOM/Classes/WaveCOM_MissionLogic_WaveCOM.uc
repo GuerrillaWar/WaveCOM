@@ -10,8 +10,23 @@ var eWaveStatus WaveStatus;
 var int CombatStartCountdown;
 var int WaveNumber;
 
+struct WaveEncounter {
+	var name EncounterID;
+	var int Earliest;
+	var int Latest;
+	var int Weighting;
+
+	structdefaultproperties
+	{
+		Earliest = 0
+		Latest = 1000
+		Weighting = 1
+	}
+};
+
 var const config float WaveCOMKillSupplyBonusMultiplier;
 var const config array<int> WaveCOMPodCount;
+var const config array<WaveEncounter> WaveEncounters;
 
 delegate EventListenerReturn OnEventDelegate(Object EventData, Object EventSource, XComGameState GameState, Name EventID);
 
@@ -53,7 +68,9 @@ function InitiateWave()
 	local XComGameStateHistory History;
 	local XComGameState_BattleData BattleData;
 	local XComGameState NewGameState;
-	local int Pods;
+	local array<WaveEncounter> WeightedStack;
+	local WaveEncounter Encounter;
+	local int Pods, Weighting;
 	local Vector ObjectiveLocation;
 
 	History = `XCOMHISTORY;
@@ -67,6 +84,7 @@ function InitiateWave()
 	BattleData = XComGameState_BattleData(NewGameState.CreateStateObject(class'XComGameState_BattleData', BattleData.ObjectID));
 
 	BattleData.SetForceLevel(Clamp(WaveNumber, 1, 20));
+	`SPAWNMGR.ForceLevel = Clamp(WaveNumber, 1, 20);
 	NewGameState.AddStateObject(BattleData);
 	
 	if (WaveNumber > WaveCOMPodCount.Length - 1)
@@ -78,14 +96,30 @@ function InitiateWave()
 		Pods = WaveCOMPodCount[WaveNumber];
 	}
 
+	foreach WaveEncounters(Encounter)
+	{
+		if (Encounter.Earliest <= WaveNumber && Encounter.Latest >= WaveNumber && Encounter.Weighting > 0)
+		{
+			Weighting = Encounter.Weighting;
+			while (Weighting > 0 )
+			{
+				WeightedStack.AddItem(Encounter);
+				--Weighting;
+			}
+		}
+	}
+
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
 	while (Pods > 0 )
 	{
+		Encounter = WeightedStack[Rand(WeightedStack.Length)];
 		class'XComGameState_AIReinforcementSpawner'.static.InitiateReinforcements(
-			'WaveCOM_ADVx3_Standard',
+			Encounter.EncounterID,
 			1, // FlareTimer
 			true, // bUseOverrideTargetLocation,
 			ObjectiveLocation, // OverrideTargetLocation, 
-			20 // Spawn tiles offset
+			40 // Spawn tiles offset
 		);
 		--Pods;
 	}
@@ -188,6 +222,12 @@ function CollectLootToHQ()
 	ItemTemplate = ItemTemplateManager.FindItemTemplate('Supplies');
 	ItemState = ItemTemplate.CreateInstanceFromTemplate(NewGameState);
 	ItemState.Quantity = Round(KillSupplies * WaveCOMKillSupplyBonusMultiplier);
+	NewGameState.AddStateObject(ItemState);
+	XComHQ.PutItemInInventory(NewGameState, ItemState, false);
+
+	ItemTemplate = ItemTemplateManager.FindItemTemplate('EleriumCore');
+	ItemState = ItemTemplate.CreateInstanceFromTemplate(NewGameState);
+	ItemState.Quantity = 1;
 	NewGameState.AddStateObject(ItemState);
 	XComHQ.PutItemInInventory(NewGameState, ItemState, false);
 
