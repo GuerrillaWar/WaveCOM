@@ -97,11 +97,105 @@ state StartingWaveCOM
 
 		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 	}
+
 	function DebugStuff()
 	{
 		DebugInitHQ();
+		DebugInitSoldiers();
+		DebugInitFacilities();
 		RemoveStartingMission();
 
+	}
+
+	function DebugInitSoldiers()
+	{
+		local XComGameStateHistory History;
+		local XComGameState NewGameState;
+		local XComGameState_HeadquartersXCom XComHQ;
+		local XComGameState_Unit UnitState;
+		local XComOnlineProfileSettings ProfileSettings;
+		local int idx;
+
+		History = `XCOMHISTORY;
+		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("DEBUG Init Soldiers");
+		XComHQ = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
+		NewGameState.AddStateObject(XComHQ);
+
+		ProfileSettings = `XPROFILESETTINGS;
+		
+		for(idx = 0; idx < 30; idx++)
+		{
+			UnitState = `CHARACTERPOOLMGR.CreateCharacter(NewGameState, ProfileSettings.Data.m_eCharPoolUsage);
+			NewGameState.AddStateObject(UnitState);
+			UnitState.ApplyInventoryLoadout(NewGameState);
+			UnitState.SetHQLocation(eSoldierLoc_Barracks);
+
+			XComHQ.AddToCrew(NewGameState, UnitState);
+		}
+
+		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	}
+
+	function DebugInitFacilities()
+	{
+		local XComGameStateHistory History;
+		local XComGameState NewGameState;
+		local XComGameState_HeadquartersXCom XComHQ;
+		local X2StrategyElementTemplateManager StratMgr;
+		local X2FacilityTemplate FacilityTemplate;
+		local array<X2FacilityTemplate> FacilityTemplates;
+		local array<StateObjectReference> FacilityRefs;
+		local XComGameState_FacilityXCom FacilityState;
+		local XComGameState_HeadquartersRoom RoomState;
+		local int idx;
+
+		StratMgr = class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager();
+		History = `XCOMHISTORY;
+		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("DEBUG Init Facilities");
+		XComHQ = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
+		NewGameState.AddStateObject(XComHQ);
+
+		for(idx = 0; idx < default.DEBUG_StartingFacilities.Length; idx++)
+		{
+			foreach History.IterateByClassType(class'XComGameState_HeadquartersRoom', RoomState)
+			{
+				if(RoomState.MapIndex == (default.DEBUG_FacilityIndex + idx))
+				{
+					FacilityTemplate = X2FacilityTemplate(StratMgr.FindStrategyElementTemplate(default.DEBUG_StartingFacilities[idx]));
+					if(FacilityTemplate != none)
+					{
+						FacilityTemplates.AddItem(FacilityTemplate);
+						RoomState = XComGameState_HeadquartersRoom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersRoom', RoomState.ObjectID));
+						NewGameState.AddStateObject(RoomState);
+						RoomState.ConstructionBlocked = false;
+						RoomState.SpecialFeature = '';
+						RoomState.Locked = false;
+						XComHQ.UnlockAdjacentRooms(NewGameState, RoomState);
+						
+						FacilityState = FacilityTemplate.CreateInstanceFromTemplate(NewGameState);
+						NewGameState.AddStateObject(FacilityState);
+						FacilityRefs.AddItem(FacilityState.GetReference());
+						FacilityState.Room = RoomState.GetReference();
+						FacilityState.ConstructionDateTime = GetGameTime();
+						
+						RoomState.Facility = FacilityState.GetReference();
+						XComHQ.Facilities.AddItem(FacilityState.GetReference());
+					}
+				}
+			}
+		}
+
+		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
+		for(idx = 0; idx < FacilityTemplates.Length; idx++)
+		{
+			if(FacilityTemplates[idx].OnFacilityBuiltFn != none)
+			{
+				FacilityTemplates[idx].OnFacilityBuiltFn(FacilityRefs[idx]);
+			}
+		}
 	}
 	
 	function SpawnBaseMission() {
@@ -314,13 +408,9 @@ Begin:
 	GetGeoscape().m_kBase.m_kCrewMgr.PopulateBaseRoomsWithCrew();
 	GetGeoscape().m_kBase.SetAvengerVisibility(true);
 
-
 	SpawnBaseMission();
-	`HQPRES.UIAvengerFacilityMenu();
-	`HQPC.GotoState('Headquarters');
-	GetGeoscape().OnEnterMissionControl();
 	GetGeoscape().Pause();
 	PrepareTacticalBattle(WaveCOMMissionSite.ObjectID);
-	`HQPRES.UISquadSelect(true/* No Cancel */);
+	LaunchTacticalBattle(WaveCOMMissionSite.ObjectID);
 
 }

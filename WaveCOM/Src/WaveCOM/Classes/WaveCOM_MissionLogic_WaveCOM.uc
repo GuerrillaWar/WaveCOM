@@ -24,7 +24,10 @@ struct WaveEncounter {
 	}
 };
 
+var const config int WaveCOMKillSupplyBonusBase;
 var const config float WaveCOMKillSupplyBonusMultiplier;
+var const config int WaveCOMWaveSupplyBonusBase;
+var const config float WaveCOMWaveSupplyBonusMultiplier;
 var const config array<int> WaveCOMPodCount;
 var const config array<WaveEncounter> WaveEncounters;
 
@@ -50,9 +53,43 @@ function UpdateCombatCountdown()
 
 function EventListenerReturn Countdown(Object EventData, Object EventSource, XComGameState GameState, Name EventID)
 {
+	local XComGameStateHistory History;
+	local XComGameState NewGameState;
+	local XComGameState_HeadquartersXCom XComHQ;
+	local XComGameState_Item ItemState;
+	local array<XComGameState_Item> ItemStates;
+	local X2ItemTemplate ItemTemplate;
+	local XComGameState_Unit UnitState;
+
 	if (WaveStatus == eWaveStatus_Preparation)
 	{
 		CombatStartCountdown = CombatStartCountdown - 1;
+
+		History = `XCOMHISTORY;
+	
+		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Collect Wave Loot");
+		XComHQ = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
+		NewGameState.AddStateObject(XComHQ);
+
+		// recover loot collected during preparation turns
+		foreach History.IterateByClassType(class'XComGameState_Unit', UnitState)
+		{
+			if( UnitState.GetTeam() == eTeam_XCom)
+			{
+				UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
+				NewGameState.AddStateObject(UnitState);
+				ItemStates = UnitState.GetAllItemsInSlot(eInvSlot_Backpack, NewGameState);
+				foreach ItemStates(ItemState)
+				{
+					ItemState.OwnerStateObject = XComHQ.GetReference();
+					UnitState.RemoveItemFromInventory(ItemState, NewGameState);
+					XComHQ.PutItemInInventory(NewGameState, ItemState, false);
+				}
+			}
+		}
+
+
 		if (CombatStartCountdown == 0)
 		{
 			InitiateWave();
@@ -67,14 +104,16 @@ function InitiateWave()
 {
 	local XComGameStateHistory History;
 	local XComGameState_BattleData BattleData;
+	local XComGameState_HeadquartersAlien AlienHQ;
 	local XComGameState NewGameState;
 	local array<WaveEncounter> WeightedStack;
+	local XComGameState_AIReinforcementSpawner Spawner;
 	local WaveEncounter Encounter;
-	local int Pods, Weighting;
+	local int Pods, Weighting, ForceLevel;
 	local Vector ObjectiveLocation;
 
 	History = `XCOMHISTORY;
-	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Collect Wave Loot");
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Update Force Level");
 
 	WaveStatus = eWaveStatus_Combat;
 	WaveNumber = WaveNumber + 1;
@@ -82,9 +121,14 @@ function InitiateWave()
 	BattleData = XComGameState_BattleData(History.GetSingleGameStateObjectForClass(class'XComGameState_BattleData'));
 	ObjectiveLocation = BattleData.MapData.ObjectiveLocation;
 	BattleData = XComGameState_BattleData(NewGameState.CreateStateObject(class'XComGameState_BattleData', BattleData.ObjectID));
+	ForceLevel = Clamp(WaveNumber, 1, 20);
 
-	BattleData.SetForceLevel(Clamp(WaveNumber, 1, 20));
-	`SPAWNMGR.ForceLevel = Clamp(WaveNumber, 1, 20);
+	AlienHQ = XComGameState_HeadquartersAlien(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersAlien'));
+	AlienHQ.ForceLevel = ForceLevel;
+	NewGameState.AddStateObject(AlienHQ);
+
+	BattleData.SetForceLevel(ForceLevel);
+	`SPAWNMGR.ForceLevel = ForceLevel;
 	NewGameState.AddStateObject(BattleData);
 	
 	if (WaveNumber > WaveCOMPodCount.Length - 1)
@@ -124,6 +168,19 @@ function InitiateWave()
 		--Pods;
 	}
 
+	
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Force Reinforcement ForceLevel");
+	foreach History.IterateByClassType(class'XComGameState_AIReinforcementSpawner', Spawner)
+	{
+		Spawner = XComGameState_AIReinforcementSpawner(NewGameState.CreateStateObject(class'XComGameState_AIReinforcementSpawner', Spawner.ObjectID));
+
+		// Pod Selection is hidden inside native code, however this function seems to do the trick, so we'll go with this
+		`SPAWNMGR.SelectPodAtLocation(Spawner.SpawnInfo, ForceLevel, 1);
+		NewGameState.AddStateObject(Spawner);
+	}
+
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
 	`XEVENTMGR.TriggerEvent('WaveCOM_WaveStart');
 }
 
@@ -144,9 +201,10 @@ function CollectLootToHQ()
 	local XComGameState NewGameState;
 	local XComGameState_BattleData BattleData;
 	local XComGameState_HeadquartersXCom XComHQ;
-	local int LootIndex, KillSupplies;
+	local int LootIndex, SupplyReward;
 	local X2ItemTemplateManager ItemTemplateManager;
 	local XComGameState_Item ItemState;
+	local array<XComGameState_Item> ItemStates;
 	local X2ItemTemplate ItemTemplate;
 	local XComGameState_Unit UnitState;
 
@@ -173,6 +231,21 @@ function CollectLootToHQ()
 			UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
 			UnitState.bRankedUp = false; // reset ranking to prevent blocking of future promotions
 			NewGameState.AddStateObject(UnitState);
+			UnitState.Abilities.Remove(0, UnitState.Abilities.Length);
+			`TACTICALRULES.InitializeUnitAbilities(NewGameState, UnitState);
+			ItemStates = UnitState.GetAllItemsInSlot(eInvSlot_Backpack, NewGameState);
+
+			if (UnitState.FindAbility('Phantom').ObjectID > 0)
+			{
+				UnitState.EnterConcealmentNewGameState(NewGameState);
+			}
+
+			foreach ItemStates(ItemState)
+			{
+				ItemState.OwnerStateObject = XComHQ.GetReference();
+				UnitState.RemoveItemFromInventory(ItemState, NewGameState);
+				XComHQ.PutItemInInventory(NewGameState, ItemState, false);
+			}
 		}
 
 		if( UnitState.IsAdvent() || UnitState.IsAlien() )
@@ -191,7 +264,8 @@ function CollectLootToHQ()
 					foreach PendingAutoLoot.LootToBeCreated(LootTemplateName)
 					{
 						ItemTemplate = ItemTemplateManager.FindItemTemplate(LootTemplateName);
-						KillSupplies = KillSupplies + ItemTemplate.TradingPostValue;
+						SupplyReward = SupplyReward + Round(ItemTemplate.TradingPostValue * WaveCOMKillSupplyBonusMultiplier);
+						SupplyReward = SupplyReward + WaveCOMKillSupplyBonusBase;
 						RolledLoot.AddItem(ItemTemplate.DataName);
 					}
 
@@ -219,9 +293,12 @@ function CollectLootToHQ()
 		XComHQ.PutItemInInventory(NewGameState, ItemState, false);
 	}
 
+	SupplyReward = SupplyReward + WaveCOMWaveSupplyBonusBase;
+	SupplyReward = SupplyReward + Round(WaveNumber * WaveCOMWaveSupplyBonusMultiplier);
+
 	ItemTemplate = ItemTemplateManager.FindItemTemplate('Supplies');
 	ItemState = ItemTemplate.CreateInstanceFromTemplate(NewGameState);
-	ItemState.Quantity = Round(KillSupplies * WaveCOMKillSupplyBonusMultiplier);
+	ItemState.Quantity = Round(SupplyReward);
 	NewGameState.AddStateObject(ItemState);
 	XComHQ.PutItemInInventory(NewGameState, ItemState, false);
 

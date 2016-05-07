@@ -68,17 +68,22 @@ function UpdateActiveUnit()
 	WorldData = `XWORLD;
 	SpawnManager = `SPAWNMGR;
 
+	`log("Removing ItemStates");
 	foreach History.IterateByClassType(class'XComGameState_Item', ItemState)
 	{
+		`log("Checking " @ItemState.GetMyTemplateName());
 		if( ItemState.OwnerStateObject.ObjectID == Unit.ObjectID )
 		{
+			`log("Removing " @ItemState.GetMyTemplateName());
 			NewGameState.RemoveStateObject(ItemState.ObjectID);
 		}
 	}
 
+	`log("Reintroducing Inventory");
 	foreach Unit.InventoryItems(ItemReference)
 	{
 		ItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', ItemReference.ObjectID));
+		`log("Adding " @ItemState.GetMyTemplateName());
 		NewGameState.AddStateObject(ItemState);
 
 		// add the gremlin to Specialists
@@ -103,8 +108,9 @@ function UpdateActiveUnit()
 	XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = Unit.GetReference();
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 
-	Visualizer = XGUnit(Unit.GetVisualizer());
+	Visualizer = XGUnit(Unit.FindOrCreateVisualizer());
 	Unit.SyncVisualizer(NewGameState);
+	Visualizer.ApplyLoadoutFromGameState(Unit, NewGameState);
 	XComHumanPawn(Visualizer.GetPawn()).SetAppearance(Unit.kAppearance);
 }
 
