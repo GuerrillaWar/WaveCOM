@@ -46,9 +46,6 @@
     <Content Include="Src\WaveCOM\Classes\WaveCOMMissionSource.uc">
       <SubType>Content</SubType>
     </Content>
-    <Content Include="Src\WaveCOM\Classes\WaveCOMResearchModifier.uc">
-      <SubType>Content</SubType>
-    </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOMShell.uc">
       <SubType>Content</SubType>
     </Content>

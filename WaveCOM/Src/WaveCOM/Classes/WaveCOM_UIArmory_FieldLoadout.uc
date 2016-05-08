@@ -53,10 +53,9 @@ function UpdateActiveUnit()
 	local XComGameState NewGameState;
 	local Vector SpawnLocation;
 	local XGUnit Visualizer;
-	local XGItem OldItemVisualizer;
 	local XComGameStateHistory History;
 	local StateObjectReference ItemReference;
-	local XComGameState_Item ItemState, OldItemState;
+	local XComGameState_Item ItemState;
 	local X2EquipmentTemplate EquipmentTemplate;
 	local XComWorldData WorldData;
 	local XComAISpawnManager SpawnManager;
@@ -134,7 +133,7 @@ function SetTacHUDScreen(UITacticalHUD Screenie)
 
 function Push_UICustomize_Menu(XComGameState_Unit UnitRef, Actor ActorPawnA)
 {
-	//InitializeCustomizeManager(UnitRef);
+	TacHUDScreen.Movie.Pres.InitializeCustomizeManager(UnitRef);
 	TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'UICustomize_Menu', TacHUDScreen));
 }
 

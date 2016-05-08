@@ -89,11 +89,9 @@ static function UpdateResearchTemplates ()
 
 	Manager = class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager();
 	Techs = Manager.GetAllTemplatesOfClass(class'X2TechTemplate');
-	`log("Scaling Research: " @Techs.Length);
 	foreach Techs(TechTemplate)
 	{
 		Tech = X2TechTemplate(TechTemplate);
-		`log("Scaling: " @Tech.DataName);
 		BasePoints = Tech.PointsToComplete;
 		Resources.ItemTemplateName = 'Supplies';
 		Resources.Quantity = Round(BasePoints * default.WaveCOMResearchSupplyCostRatio);
@@ -101,8 +99,6 @@ static function UpdateResearchTemplates ()
 		Tech.bJumpToLabs = false;
 		Tech.PointsToComplete = 0;
 		Manager.AddStrategyElementTemplate(Tech, true);
-		
-		`log("Supply Cost: " @Round(BasePoints * default.WaveCOMResearchSupplyCostRatio));
 	}
 }
 
@@ -111,15 +107,12 @@ static function UpdateSchematicTemplates ()
 	local X2ItemTemplateManager Manager;
 	local array<X2SchematicTemplate> Schematics;
 	local X2SchematicTemplate Schematic;
-	local int BasePoints;
-	local ArtifactCost Resources;
 
 	Manager = class'X2ItemTemplateManager'.static.GetItemTemplateManager();
 	Schematics = Manager.GetAllSchematicTemplates();
 	foreach Schematics(Schematic)
 	{
 		`log("Updating: " @Schematic.DataName);
-
 		Schematic.OnBuiltFn = UpgradeItems;
 
 		Manager.AddItemTemplate(Schematic, true);

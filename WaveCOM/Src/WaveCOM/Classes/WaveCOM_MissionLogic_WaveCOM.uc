@@ -28,6 +28,7 @@ var const config int WaveCOMKillSupplyBonusBase;
 var const config float WaveCOMKillSupplyBonusMultiplier;
 var const config int WaveCOMWaveSupplyBonusBase;
 var const config float WaveCOMWaveSupplyBonusMultiplier;
+var const config int WaveCOMPassiveXPPerKill;
 var const config array<int> WaveCOMPodCount;
 var const config array<WaveEncounter> WaveEncounters;
 
@@ -58,7 +59,6 @@ function EventListenerReturn Countdown(Object EventData, Object EventSource, XCo
 	local XComGameState_HeadquartersXCom XComHQ;
 	local XComGameState_Item ItemState;
 	local array<XComGameState_Item> ItemStates;
-	local X2ItemTemplate ItemTemplate;
 	local XComGameState_Unit UnitState;
 
 	if (WaveStatus == eWaveStatus_Preparation)
@@ -201,7 +201,7 @@ function CollectLootToHQ()
 	local XComGameState NewGameState;
 	local XComGameState_BattleData BattleData;
 	local XComGameState_HeadquartersXCom XComHQ;
-	local int LootIndex, SupplyReward;
+	local int LootIndex, SupplyReward, KillCount;
 	local X2ItemTemplateManager ItemTemplateManager;
 	local XComGameState_Item ItemState;
 	local array<XComGameState_Item> ItemStates;
@@ -214,6 +214,7 @@ function CollectLootToHQ()
 
 	History = `XCOMHISTORY;
 	
+	KillCount = 0;
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Collect Wave Loot");
 	XComHQ = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
 	XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
@@ -226,9 +227,41 @@ function CollectLootToHQ()
 	ItemTemplateManager = class'X2ItemTemplateManager'.static.GetItemTemplateManager();
 	foreach History.IterateByClassType(class'XComGameState_Unit', UnitState)
 	{
+
+		if( UnitState.IsAdvent() || UnitState.IsAlien() )
+		{
+			if ( !UnitState.bBodyRecovered ) {
+				class'X2LootTableManager'.static.GetLootTableManager().RollForLootCarrier(UnitState.GetMyTemplate().Loot, PendingAutoLoot);
+
+				// repurpose bBodyRecovered as a way to determine whether we got the loot yet
+				UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
+				UnitState.bBodyRecovered = true;
+				NewGameState.AddStateObject(UnitState);
+				++KillCount;
+
+				if( PendingAutoLoot.LootToBeCreated.Length > 0 )
+				{
+					foreach PendingAutoLoot.LootToBeCreated(LootTemplateName)
+					{
+						ItemTemplate = ItemTemplateManager.FindItemTemplate(LootTemplateName);
+						SupplyReward = SupplyReward + Round(ItemTemplate.TradingPostValue * WaveCOMKillSupplyBonusMultiplier);
+						SupplyReward = SupplyReward + WaveCOMKillSupplyBonusBase;
+						RolledLoot.AddItem(ItemTemplate.DataName);
+					}
+
+				}
+				PendingAutoLoot.LootToBeCreated.Remove(0, PendingAutoLoot.LootToBeCreated.Length);
+				PendingAutoLoot.AvailableLoot.Remove(0, PendingAutoLoot.AvailableLoot.Length);
+			}
+		}
+	}
+
+	foreach History.IterateByClassType(class'XComGameState_Unit', UnitState)
+	{
 		if( UnitState.GetTeam() == eTeam_XCom)
 		{
 			UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
+			UnitState.AddXp(KillCount * WaveCOMPassiveXPPerKill);
 			UnitState.bRankedUp = false; // reset ranking to prevent blocking of future promotions
 			NewGameState.AddStateObject(UnitState);
 			UnitState.Abilities.Remove(0, UnitState.Abilities.Length);
@@ -246,33 +279,7 @@ function CollectLootToHQ()
 				UnitState.RemoveItemFromInventory(ItemState, NewGameState);
 				XComHQ.PutItemInInventory(NewGameState, ItemState, false);
 			}
-		}
 
-		if( UnitState.IsAdvent() || UnitState.IsAlien() )
-		{
-			if ( !UnitState.bBodyRecovered ) {
-				class'X2LootTableManager'.static.GetLootTableManager().RollForLootCarrier(UnitState.GetMyTemplate().Loot, PendingAutoLoot);
-
-				// repurpose bBodyRecovered as a way to determine whether we got the loot yet
-				UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
-				UnitState.bBodyRecovered = true;
-				NewGameState.AddStateObject(UnitState);
-
-				if( PendingAutoLoot.LootToBeCreated.Length > 0 )
-				{
-					`log("This body was recovered");
-					foreach PendingAutoLoot.LootToBeCreated(LootTemplateName)
-					{
-						ItemTemplate = ItemTemplateManager.FindItemTemplate(LootTemplateName);
-						SupplyReward = SupplyReward + Round(ItemTemplate.TradingPostValue * WaveCOMKillSupplyBonusMultiplier);
-						SupplyReward = SupplyReward + WaveCOMKillSupplyBonusBase;
-						RolledLoot.AddItem(ItemTemplate.DataName);
-					}
-
-				}
-				PendingAutoLoot.LootToBeCreated.Remove(0, PendingAutoLoot.LootToBeCreated.Length);
-				PendingAutoLoot.AvailableLoot.Remove(0, PendingAutoLoot.AvailableLoot.Length);
-			}
 		}
 	}
 

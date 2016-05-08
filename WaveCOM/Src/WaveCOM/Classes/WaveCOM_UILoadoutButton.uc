@@ -7,7 +7,6 @@ var UIPanel ActionsPanel;
 var UITacticalHUD TacHUDScreen;
 var WaveCOM_UIArmory_FieldLoadout UIArmory_FieldLoad;
 var WaveCOM_UIAvengerHUD AvengerHUD;
-var XComGameState_HeadquartersXCom XComHQ;
 
 var const config array<int> WaveCOMDeployCosts;
 var int CurrentDeployCost;
