@@ -190,8 +190,9 @@ function HandleTeamDead(XGPlayer LosingPlayer)
 	{
 		BeginPreparationRound();
 	}
-	else
+	else if (LosingPlayer.m_eTeam == eTeam_XCom)
 	{
+		`TACTICALRULES.EndBattle(LosingPlayer, eUICombatLose_UnfailableGeneric, false);
 	}
 }
 
