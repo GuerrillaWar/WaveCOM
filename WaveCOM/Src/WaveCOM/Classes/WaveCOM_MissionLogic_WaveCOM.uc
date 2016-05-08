@@ -88,7 +88,7 @@ function EventListenerReturn Countdown(Object EventData, Object EventSource, XCo
 				}
 			}
 		}
-
+		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 
 		if (CombatStartCountdown == 0)
 		{

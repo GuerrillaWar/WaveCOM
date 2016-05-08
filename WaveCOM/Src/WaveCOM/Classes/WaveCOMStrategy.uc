@@ -24,36 +24,6 @@ function StartWaveCOM()
 
 state StartingWaveCOM
 {
-	function DebugInitHQ()
-	{
-		local XComGameStateHistory History;
-		local XComGameState NewGameState;
-		local XComGameState_HeadquartersXCom XComHQ;
-		local XComGameState_Skyranger SkyrangerState;
-
-		History = `XCOMHISTORY;
-		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("DEBUG Init HQ");
-		XComHQ = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
-		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
-		NewGameState.AddStateObject(XComHQ);
-
-		XComHQ.bDontShowSetupMovies = true;
-		XComHQ.AddResource(NewGameState, 'Supplies', (3000 - XComHQ.GetSupplies()));
-		XComHQ.AddResource(NewGameState, 'Intel', (1000 - XComHQ.GetIntel()));
-		XComHQ.AddResource(NewGameState, 'AlienAlloy', (10000 - XComHQ.GetAlienAlloys()));
-		XComHQ.AddResource(NewGameState, 'EleriumDust', (10000 - XComHQ.GetEleriumDust()));
-
-		// Dock Skyranger at HQ
-		SkyrangerState = XComGameState_Skyranger(NewGameState.CreateStateObject(class'XComGameState_Skyranger', XComHQ.SkyrangerRef.ObjectID));
-		NewGameState.AddStateObject(SkyrangerState);
-		SkyrangerState.Location = XComHQ.Location;
-		SkyrangerState.SourceLocation.X = SkyrangerState.Location.X;
-		SkyrangerState.SourceLocation.Y = SkyrangerState.Location.Y;
-		SkyrangerState.TargetEntity = XComHQ.GetReference();
-		SkyrangerState.SquadOnBoard = false;
-
-		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
-	}
 
 	function SetupBaseResources()
 	{
@@ -100,14 +70,10 @@ state StartingWaveCOM
 
 	function DebugStuff()
 	{
-		DebugInitHQ();
-		DebugInitSoldiers();
-		DebugInitFacilities();
 		RemoveStartingMission();
-
 	}
 
-	function DebugInitSoldiers()
+	function InitSoldiers()
 	{
 		local XComGameStateHistory History;
 		local XComGameState NewGameState;
@@ -137,7 +103,7 @@ state StartingWaveCOM
 		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 	}
 
-	function DebugInitFacilities()
+	function InitFacilities()
 	{
 		local XComGameStateHistory History;
 		local XComGameState NewGameState;
@@ -352,12 +318,6 @@ Begin:
 	NewGameEventHook();
 
 	class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController().ClientSetCameraFade(true, MakeColor(0, 0, 0), vect2d(0, 1), 0.0);
-	
-	// DEBUG STRATEGY
-	if (m_bDebugStart)
-	{
-		DebugStuff();
-	}
 
 	SetupBaseResources();
 	GiveEngineer();
@@ -385,6 +345,8 @@ Begin:
 	GiveScientist();
 	GiveScientist();
 	GiveScientist();
+	InitSoldiers();
+	InitFacilities();
 
 
 	while(`HQPRES.IsBusy())

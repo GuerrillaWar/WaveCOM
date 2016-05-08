@@ -9,11 +9,14 @@ var WaveCOM_UIArmory_FieldLoadout UIArmory_FieldLoad;
 var WaveCOM_UIAvengerHUD AvengerHUD;
 var XComGameState_HeadquartersXCom XComHQ;
 
-var const config int WaveCOMDeployCost;
+var const config array<int> WaveCOMDeployCosts;
+var int CurrentDeployCost;
 
 event OnInit(UIScreen Screen)
 {
 	local Object ThisObj;
+
+	CurrentDeployCost = 50;
 
 	TacHUDScreen = UITacticalHUD(Screen);
 	`log("Loading my button thing.");
@@ -30,7 +33,7 @@ event OnInit(UIScreen Screen)
 	Button1.SetX(ActionsPanel.X);
 
 	Button6 = ActionsPanel.Spawn(class'UIButton', ActionsPanel);
-	Button6.InitButton('DeploySoldier', "Deploy Soldier - " @WaveCOMDeployCost, OpenDeployMenu);
+	Button6.InitButton('DeploySoldier', "Deploy Soldier - " @CurrentDeployCost, OpenDeployMenu);
 	Button6.SetY(ActionsPanel.Y + 30);
 	Button6.SetX(ActionsPanel.X);
 
@@ -57,11 +60,46 @@ event OnInit(UIScreen Screen)
 	AvengerHUD = TacHUDScreen.Movie.Pres.Spawn(class'WaveCOM_UIAvengerHUD', TacHUDScreen.Movie.Pres);
 	TacHUDScreen.Movie.Stack.Push(AvengerHUD, TacHUDScreen.Movie);
 	AvengerHUD.HideResources();
+	UpdateDeployCost();
 	UpdateResources();
 
 	ThisObj = self;
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'WaveCOM_WaveStart', OnWaveStart, ELD_Immediate);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'WaveCOM_WaveEnd', OnWaveEnd, ELD_Immediate);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'UnitDied', OnDeath, ELD_OnStateSubmitted);
+}
+
+private function UpdateDeployCost ()
+{
+	local XComGameState_Unit UnitState;
+	local int XComCount;
+
+	XComCount = 0;
+	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
+	{
+		if( UnitState.GetTeam() == eTeam_XCom && UnitState.IsAlive())
+		{
+			++XComCount;
+		}
+	}
+
+	if (XComCount > WaveCOMDeployCosts.Length - 1)
+	{
+		CurrentDeployCost = WaveCOMDeployCosts[WaveCOMDeployCosts.Length - 1];
+	}
+	else
+	{
+		CurrentDeployCost = WaveCOMDeployCosts[XComCount];
+	}
+
+	Button6.SetText("Deploy Soldier - " @CurrentDeployCost);
+
+}
+
+private function EventListenerReturn OnDeath(Object EventData, Object EventSource, XComGameState NewGameState, Name InEventID)
+{
+	UpdateDeployCost();
+	return ELR_NoInterrupt;
 }
 
 private function EventListenerReturn OnWaveStart(Object EventData, Object EventSource, XComGameState NewGameState, Name InEventID)
@@ -150,7 +188,7 @@ public function OpenDeployMenu(UIButton Button)
 		break;
 	}
 		
-	if (XComHQ.GetSupplies() < WaveCOMDeployCost)
+	if (XComHQ.GetSupplies() < CurrentDeployCost)
 	{
 		return;
 	}
@@ -165,12 +203,12 @@ public function OpenDeployMenu(UIButton Button)
 
 		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Pay for Soldier");
 		Resources.ItemTemplateName = 'Supplies';
-		Resources.Quantity = WaveCOMDeployCost;
+		Resources.Quantity = CurrentDeployCost;
 		DeployCost.ResourceCosts.AddItem(Resources);
 		XComHQ.PayStrategyCost(NewGameState, DeployCost, EmptyScalars);
 
 		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
-
+		UpdateDeployCost();
 		UpdateResources();
 	}
 }

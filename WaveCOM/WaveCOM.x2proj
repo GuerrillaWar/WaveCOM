@@ -64,6 +64,9 @@
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UIArmory_FieldLoadout.uc">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UIArmory_Loadout.uc">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UIAvengerHUD.uc">
       <SubType>Content</SubType>
     </Content>
