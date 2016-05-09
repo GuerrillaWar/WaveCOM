@@ -51,32 +51,38 @@ function UpdateActiveUnit()
 {
 	local XComGameState_Unit Unit;
 	local XComGameState NewGameState;
+	local name EffectName;
+	local XComGameState_Effect EffectState;
 	local Vector SpawnLocation;
 	local XGUnit Visualizer;
 	local XComGameStateHistory History;
-	local StateObjectReference ItemReference;
+	local StateObjectReference ItemReference, AbilityReference;
 	local XComGameState_Item ItemState;
+	local XComGameState_Ability AbilityState;
 	local X2EquipmentTemplate EquipmentTemplate;
 	local XComWorldData WorldData;
 	local XComAISpawnManager SpawnManager;
+	local int ix;
 
 	History = `XCOMHISTORY;
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Update Abilities");
 
 	Unit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
-	Unit.Abilities.Remove(0, Unit.Abilities.Length);
-
 	WorldData = `XWORLD;
 	SpawnManager = `SPAWNMGR;
 
-	`log("Removing ItemStates");
-	foreach History.IterateByClassType(class'XComGameState_Item', ItemState)
+	`log("Cleaning and readding Abilities");
+	foreach Unit.Abilities(AbilityReference)
 	{
-		`log("All Items " @ItemState.GetMyTemplateName());
-		if( ItemState.OwnerStateObject.ObjectID == Unit.ObjectID )
-		{
-			`log("Would Remove " @ItemState.GetMyTemplateName());
-		}
+		NewGameState.RemoveStateObject(AbilityReference.ObjectID);
+	}
+	Unit.Abilities.Remove(0, Unit.Abilities.Length);
+
+	for (ix = 0; ix < Unit.AppliedEffectNames.Length; ++ix)
+	{
+		EffectName = Unit.AppliedEffectNames[ix];
+		EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( Unit.AppliedEffects[ ix ].ObjectID ) );
+		EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
 	}
 
 	`log("Reintroducing Inventory");
@@ -86,6 +92,30 @@ function UpdateActiveUnit()
 		`log("Adding " @ItemState.GetMyTemplateName());
 		NewGameState.AddStateObject(ItemState);
 	}
+
+	Visualizer = XGUnit(Unit.FindOrCreateVisualizer());
+	Unit.SyncVisualizer(NewGameState);
+	Visualizer.ApplyLoadoutFromGameState(Unit, NewGameState);
+	XComHumanPawn(Visualizer.GetPawn()).SetAppearance(Unit.kAppearance);
+
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	
+	foreach Unit.InventoryItems(ItemReference)
+	{
+		ItemState = XComGameState_Item(NewGameState.GetGameStateForObjectID(ItemReference.ObjectID));
+		if( ItemState.OwnerStateObject.ObjectID == Unit.ObjectID )
+		{
+			EquipmentTemplate = X2EquipmentTemplate(ItemState.GetMyTemplate());
+			if( EquipmentTemplate != none && EquipmentTemplate.CosmeticUnitTemplate != "" )
+			{
+				SpawnLocation = WorldData.GetPositionFromTileCoordinates(Unit.TileLocation);
+				ItemState.CosmeticUnitRef = SpawnManager.CreateUnit(SpawnLocation, name(EquipmentTemplate.CosmeticUnitTemplate), Unit.GetTeam(), true);
+			}
+		}
+	}
+
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Reinit Abilities");
+	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitReference.ObjectID));
 
 	`TACTICALRULES.InitializeUnitAbilities(NewGameState, Unit);
 	if (Unit.FindAbility('Phantom').ObjectID > 0)
@@ -97,26 +127,6 @@ function UpdateActiveUnit()
 	XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = Unit.GetReference();
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 
-	Visualizer = XGUnit(Unit.FindOrCreateVisualizer());
-	Unit.SyncVisualizer(NewGameState);
-	Visualizer.ApplyLoadoutFromGameState(Unit, NewGameState);
-	XComHumanPawn(Visualizer.GetPawn()).SetAppearance(Unit.kAppearance);
-	
-	`log("Spawning them gremlins");
-	foreach Unit.InventoryItems(ItemReference)
-	{
-		ItemState = XComGameState_Item(NewGameState.GetGameStateForObjectID(ItemReference.ObjectID));
-		// add the gremlin to Specialists
-		if( ItemState.OwnerStateObject.ObjectID == Unit.ObjectID )
-		{
-			EquipmentTemplate = X2EquipmentTemplate(ItemState.GetMyTemplate());
-			if( EquipmentTemplate != none && EquipmentTemplate.CosmeticUnitTemplate != "" )
-			{
-				SpawnLocation = WorldData.GetPositionFromTileCoordinates(Unit.TileLocation);
-				ItemState.CosmeticUnitRef = SpawnManager.CreateUnit(SpawnLocation, name(EquipmentTemplate.CosmeticUnitTemplate), Unit.GetTeam(), true);
-			}
-		}
-	}
 }
 
 simulated function OnCancel()

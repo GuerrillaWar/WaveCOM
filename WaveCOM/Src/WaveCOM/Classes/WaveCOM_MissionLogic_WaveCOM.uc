@@ -30,6 +30,7 @@ var const config int WaveCOMWaveSupplyBonusBase;
 var const config float WaveCOMWaveSupplyBonusMultiplier;
 var const config int WaveCOMPassiveXPPerKill;
 var const config array<int> WaveCOMPodCount;
+var const config array<int> WaveCOMForceLevel;
 var const config array<WaveEncounter> WaveEncounters;
 
 delegate EventListenerReturn OnEventDelegate(Object EventData, Object EventSource, XComGameState GameState, Name EventID);
@@ -121,7 +122,16 @@ function InitiateWave()
 	BattleData = XComGameState_BattleData(History.GetSingleGameStateObjectForClass(class'XComGameState_BattleData'));
 	ObjectiveLocation = BattleData.MapData.ObjectiveLocation;
 	BattleData = XComGameState_BattleData(NewGameState.CreateStateObject(class'XComGameState_BattleData', BattleData.ObjectID));
-	ForceLevel = Clamp(WaveNumber, 1, 20);
+
+	if (WaveNumber > WaveCOMForceLevel.Length - 1)
+	{
+		ForceLevel = WaveCOMForceLevel[WaveCOMForceLevel.Length - 1];
+	}
+	else
+	{
+		ForceLevel = WaveCOMForceLevel[WaveNumber];
+	}
+	ForceLevel = Clamp(ForceLevel, 1, 20);
 
 	AlienHQ = XComGameState_HeadquartersAlien(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersAlien'));
 	AlienHQ.ForceLevel = ForceLevel;
@@ -200,11 +210,14 @@ function CollectLootToHQ()
 {
 	local XComGameStateHistory History;
 	local XComGameState NewGameState;
+	local name EffectName;
+	local XComGameState_Effect EffectState;
 	local XComGameState_BattleData BattleData;
 	local XComGameState_HeadquartersXCom XComHQ;
 	local int LootIndex, SupplyReward, KillCount;
 	local X2ItemTemplateManager ItemTemplateManager;
 	local XComGameState_Item ItemState;
+	local StateObjectReference AbilityReference;
 	local array<XComGameState_Item> ItemStates;
 	local X2ItemTemplate ItemTemplate;
 	local XComGameState_Unit UnitState;
@@ -212,6 +225,7 @@ function CollectLootToHQ()
 	local LootResults PendingAutoLoot;
 	local Name LootTemplateName;
 	local array<Name> RolledLoot;
+	local int x;
 
 	History = `XCOMHISTORY;
 	
@@ -265,15 +279,8 @@ function CollectLootToHQ()
 			UnitState.AddXp(KillCount * WaveCOMPassiveXPPerKill);
 			UnitState.bRankedUp = false; // reset ranking to prevent blocking of future promotions
 			NewGameState.AddStateObject(UnitState);
-			UnitState.Abilities.Remove(0, UnitState.Abilities.Length);
-			`TACTICALRULES.InitializeUnitAbilities(NewGameState, UnitState);
+
 			ItemStates = UnitState.GetAllItemsInSlot(eInvSlot_Backpack, NewGameState);
-
-			if (UnitState.FindAbility('Phantom').ObjectID > 0)
-			{
-				UnitState.EnterConcealmentNewGameState(NewGameState);
-			}
-
 			foreach ItemStates(ItemState)
 			{
 				ItemState.OwnerStateObject = XComHQ.GetReference();
@@ -317,6 +324,45 @@ function CollectLootToHQ()
 	XComHQ.PutItemInInventory(NewGameState, ItemState, false);
 
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
+	// Reset Unit Abilities
+	foreach History.IterateByClassType(class'XComGameState_Unit', UnitState)
+	{
+		if( UnitState.GetTeam() == eTeam_XCom)
+		{
+			NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Clean Unit State");
+			UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
+			NewGameState.AddStateObject(UnitState);
+			`log("Cleaning and readding Abilities");
+			foreach UnitState.Abilities(AbilityReference)
+			{
+				NewGameState.RemoveStateObject(AbilityReference.ObjectID);
+			}
+
+			for (x = 0; x < UnitState.AppliedEffectNames.Length; ++x)
+			{
+				EffectName = UnitState.AppliedEffectNames[x];
+				EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AppliedEffects[ x ].ObjectID ) );
+				EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
+			}
+
+			UnitState.Abilities.Remove(0, UnitState.Abilities.Length);
+			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
+
+			NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refill Unit State");
+			UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
+			`TACTICALRULES.InitializeUnitAbilities(NewGameState, UnitState);
+
+			if (UnitState.FindAbility('Phantom').ObjectID > 0)
+			{
+				UnitState.EnterConcealmentNewGameState(NewGameState);
+			}
+			NewGameState.AddStateObject(UnitState);
+			XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = UnitState.GetReference();
+			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+		}
+	}
 }
 
 function BeginPreparationRound()
