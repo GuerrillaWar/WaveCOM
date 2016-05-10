@@ -46,6 +46,22 @@ state StartingWaveCOM
 		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 	}
 
+	function AddDebugResources()
+	{
+		local XComGameStateHistory History;
+		local XComGameState NewGameState;
+		local XComGameState_HeadquartersXCom XComHQ;
+
+		History = `XCOMHISTORY;
+		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("SetupBase HQ");
+		XComHQ = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
+		NewGameState.AddStateObject(XComHQ);
+		XComHQ.AddResource(NewGameState, 'Supplies', (20000 - XComHQ.GetSupplies()));
+
+		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	}
+
 	function RemoveStartingMission()
 	{
 		local XComGameStateHistory History;
@@ -314,12 +330,19 @@ Begin:
 	{
 		Sleep(0);
 	}
+
 		
 	NewGameEventHook();
 
 	class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController().ClientSetCameraFade(true, MakeColor(0, 0, 0), vect2d(0, 1), 0.0);
 
 	SetupBaseResources();
+
+	if (m_bDebugStart)
+	{
+		AddDebugResources();
+	}
+
 	GiveEngineer();
 	GiveEngineer();
 	GiveEngineer();
