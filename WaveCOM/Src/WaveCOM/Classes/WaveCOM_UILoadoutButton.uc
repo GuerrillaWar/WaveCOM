@@ -73,14 +73,17 @@ private function UpdateDeployCost ()
 	local XComGameState_Unit UnitState;
 	local int XComCount;
 
+	`log("Updating deploy cost");
 	XComCount = 0;
 	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
 	{
-		if( UnitState.GetTeam() == eTeam_XCom && UnitState.IsAlive())
+		if( (UnitState.GetTeam() == eTeam_XCom) && UnitState.IsAlive())
 		{
+			`log("Found Unit:" @UnitState.GetFullName());
 			++XComCount;
 		}
 	}
+	`log("Count: " @XComCount);
 
 	if (XComCount > WaveCOMDeployCosts.Length - 1)
 	{
