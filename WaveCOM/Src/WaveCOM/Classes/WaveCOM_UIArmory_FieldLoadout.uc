@@ -82,6 +82,10 @@ function UpdateActiveUnit()
 	{
 		EffectName = Unit.AppliedEffectNames[ix];
 		EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( Unit.AppliedEffects[ ix ].ObjectID ) );
+		if (EffectState != None)
+		{
+			EffectState.GetX2Effect().UnitEndedTacticalPlay(EffectState, Unit);
+		}
 		EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
 	}
 

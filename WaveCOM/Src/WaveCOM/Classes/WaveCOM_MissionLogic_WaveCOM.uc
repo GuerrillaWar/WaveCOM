@@ -343,6 +343,10 @@ function CollectLootToHQ()
 			{
 				EffectName = UnitState.AppliedEffectNames[x];
 				EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AppliedEffects[ x ].ObjectID ) );
+				if (EffectState != None)
+				{
+					EffectState.GetX2Effect().UnitEndedTacticalPlay(EffectState, UnitState);
+				}
 				EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
 			}
 
