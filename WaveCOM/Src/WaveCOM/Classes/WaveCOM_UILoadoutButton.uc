@@ -174,7 +174,6 @@ public function OpenDeployMenu(UIButton Button)
 	local XComGameStateHistory History;
 	local XComGameState_Unit StrategyUnit;
 	local XComGameState_HeadquartersXCom XComHQ;
-	local XComGameState StrategyState;
 	local ArtifactCost Resources;
 	local int LastStrategyStateIndex;
 	local StrategyCost DeployCost;
@@ -183,15 +182,11 @@ public function OpenDeployMenu(UIButton Button)
 
 	History = `XCOMHISTORY;
 	// grab the archived strategy state from the history and the headquarters object
-	LastStrategyStateIndex = History.FindStartStateIndex() - 1;
-	StrategyState = History.GetGameStateFromHistory(LastStrategyStateIndex, eReturnType_Copy, false);
-	foreach StrategyState.IterateByClassType(class'XComGameState_HeadquartersXCom', XComHQ)
-	{
-		break;
-	}
+	XComHQ = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
 		
 	if (XComHQ.GetSupplies() < CurrentDeployCost)
 	{
+		UpdateResources();
 		return;
 	}
 
@@ -204,11 +199,13 @@ public function OpenDeployMenu(UIButton Button)
 		AddStrategyUnitToBoard(StrategyUnit, History);
 
 		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Pay for Soldier");
+		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
+
 		Resources.ItemTemplateName = 'Supplies';
 		Resources.Quantity = CurrentDeployCost;
 		DeployCost.ResourceCosts.AddItem(Resources);
 		XComHQ.PayStrategyCost(NewGameState, DeployCost, EmptyScalars);
-
+		NewGameState.AddStateObject(XComHQ);
 		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 		UpdateDeployCost();
 		UpdateResources();
