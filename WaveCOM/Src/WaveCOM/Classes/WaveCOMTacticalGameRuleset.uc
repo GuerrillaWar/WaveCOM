@@ -2,6 +2,8 @@
 
 class WaveCOMTacticalGameRuleset extends X2TacticalGameRuleset config(WaveCOM);
 
+var config bool REFILL_ITEM_CHARGES;
+
 struct MissionLogicBinding
 {
 	var string MissionType;

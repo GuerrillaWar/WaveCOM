@@ -305,12 +305,12 @@ private function bool DidPlayerRunOutOfPlayableUnits(XGPlayer InPlayer, XComGame
 
 function bool AnyPendingReinforcements()
 {
-	local XComGameState_AIReinforcementSpawner AISPawnerState;
+	local WaveCOM_NonstackingReinforcements AISPawnerState;
 	local XComGameStateHistory History;
 
 	History = `XCOMHISTORY;
 
-	foreach History.IterateByClassType(class'XComGameState_AIReinforcementSpawner', AISPawnerState)
+	foreach History.IterateByClassType(class'WaveCOM_NonstackingReinforcements', AISPawnerState)
 	{
 		break;
 	}

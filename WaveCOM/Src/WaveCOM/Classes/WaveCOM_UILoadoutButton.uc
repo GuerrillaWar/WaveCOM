@@ -77,7 +77,9 @@ private function UpdateDeployCost ()
 	XComCount = 0;
 	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
 	{
-		if( (UnitState.GetTeam() == eTeam_XCom) && UnitState.IsAlive())
+		// Don't make summoned/MC'd units not count
+		//Suggestion: Add units to XCOMHQ.Squad for better tracking
+		if( (UnitState.GetTeam() == eTeam_XCom) && UnitState.IsAlive() && UnitState.IsASoldier())
 		{
 			`log("Found Unit:" @UnitState.GetFullName());
 			++XComCount;
