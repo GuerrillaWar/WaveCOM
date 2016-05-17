@@ -251,6 +251,7 @@ function CollectLootToHQ()
 				// repurpose bBodyRecovered as a way to determine whether we got the loot yet
 				UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
 				UnitState.bBodyRecovered = true;
+				UnitState.RemoveUnitFromPlay(); // must be done in the name of performance
 				NewGameState.AddStateObject(UnitState);
 				++KillCount;
 
@@ -343,6 +344,17 @@ function CollectLootToHQ()
 			{
 				EffectName = UnitState.AppliedEffectNames[x];
 				EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AppliedEffects[ x ].ObjectID ) );
+				if (EffectState != None)
+				{
+					EffectState.GetX2Effect().UnitEndedTacticalPlay(EffectState, UnitState);
+				}
+				EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
+			}
+
+			for (x = 0; x < UnitState.AffectedByEffectNames.Length; ++x)
+			{
+				EffectName = UnitState.AffectedByEffectNames[x];
+				EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AffectedByEffects[ x ].ObjectID ) );
 				if (EffectState != None)
 				{
 					EffectState.GetX2Effect().UnitEndedTacticalPlay(EffectState, UnitState);

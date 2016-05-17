@@ -186,6 +186,7 @@ public function OpenDeployMenu(UIButton Button)
 		
 	if (XComHQ.GetSupplies() < CurrentDeployCost)
 	{
+		UpdateDeployCost();
 		UpdateResources();
 		return;
 	}
