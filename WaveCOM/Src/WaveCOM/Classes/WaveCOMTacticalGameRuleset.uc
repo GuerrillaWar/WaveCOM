@@ -318,6 +318,7 @@ private static function GetItemsToUpgrade(X2ItemTemplate UpgradeItemTemplate, ou
 
 function ApplyStartOfMatchConditions()
 {
+	`log("Testing LoadRelevantMissionLogic Order");
 	LoadRelevantMissionLogic();
 	MakeAllTechInstant();
 	UpdateSchematicTemplates();

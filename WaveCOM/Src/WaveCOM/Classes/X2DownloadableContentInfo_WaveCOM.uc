@@ -18,6 +18,11 @@ class X2DownloadableContentInfo_WaveCOM extends X2DownloadableContentInfo;
 static event OnLoadedSavedGame()
 {}
 
+static event OnPreMission(XComGameState NewGameState, XComGameState_MissionSite MissionState)
+{
+	`log("Testing OnPremission Order");
+}
+
 /// <summary>
 /// Called when the player starts a new campaign while this DLC / Mod is installed
 /// </summary>

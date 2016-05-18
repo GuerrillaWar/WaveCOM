@@ -110,7 +110,7 @@ function UpdateActiveUnit()
 		if( ItemState.OwnerStateObject.ObjectID == Unit.ObjectID )
 		{
 			EquipmentTemplate = X2EquipmentTemplate(ItemState.GetMyTemplate());
-			if( EquipmentTemplate != none && EquipmentTemplate.CosmeticUnitTemplate != "" )
+			if( EquipmentTemplate != none && EquipmentTemplate.CosmeticUnitTemplate != "" && ItemState.CosmeticUnitRef.ObjectID == 0)
 			{
 				SpawnLocation = WorldData.GetPositionFromTileCoordinates(Unit.TileLocation);
 				ItemState.CosmeticUnitRef = SpawnManager.CreateUnit(SpawnLocation, name(EquipmentTemplate.CosmeticUnitTemplate), Unit.GetTeam(), true);
