@@ -159,8 +159,8 @@ function Push_UIArmory_Implants(StateObjectReference UnitRef)
 	`XEVENTMGR.TriggerEvent('OnViewPCS', , , NewGameState);
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 
-	if(TacHUDScreen.Movie.Stack.IsNotInStack(class'UIArmory_Implants'))
-		UIArmory_Implants(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'UIArmory_Implants', TacHUDScreen))).InitImplants(UnitRef);
+	if(TacHUDScreen.Movie.Stack.IsNotInStack(class'WaveCOM_UIInventory_PCS'))
+		TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'WaveCOM_UIInventory_PCS', TacHUDScreen));
 }
 
 function Push_UIArmory_WeaponUpgrade(StateObjectReference UnitOrWeaponRef)
@@ -199,6 +199,150 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 		PromotionUI = UIArmory_Promotion(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'UIArmory_Promotion', TacHUDScreen)));
 	
 	PromotionUI.InitPromotion(UnitRef, bInstantTransition);
+}
+
+
+simulated function PopulateData()
+{
+	local XComGameState_Unit Unit;
+	local XComGameState_Item ItemState, NewItemState, NewBaseItemState, BaseItem;
+	local XComGameState NewGameState;
+	local XComGameStateHistory History;
+	local array<name> UtilityItemTypes;
+	local name ItemTemplateName;
+	local array<XComGameState_Item> UtilityItems, GrenadeItems, MergableItems;
+	local int BaseAmmo; 
+
+	History = `XCOMHISTORY;
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh unit consumables");
+
+	Unit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
+	NewGameState.AddStateObject(Unit);
+
+	UtilityItems = Unit.GetAllItemsInSlot(eInvSlot_Utility);
+	GrenadeItems = Unit.GetAllItemsInSlot(eInvSlot_GrenadePocket);
+
+	`log("=====Initializing refillable items=====",, 'Refill items');
+
+	// Combine utility slots and grenade slots
+	foreach GrenadeItems(ItemState)
+	{
+		UtilityItems.AddItem(ItemState);
+	}
+
+	// Acquring unique items
+	foreach UtilityItems(ItemState)
+	{
+		if (UtilityItemTypes.Find(ItemState.GetMyTemplateName()) == INDEX_NONE)
+		{
+			UtilityItemTypes.AddItem(ItemState.GetMyTemplateName());
+			`log("Item in inventory:" @ ItemState.GetMyTemplateName(),, 'Refill items');
+		}
+	}
+
+	// Unmerge items
+	foreach UtilityItemTypes(ItemTemplateName)
+	{
+		MergableItems.Length = 0;
+		BaseItem = none;
+		BaseAmmo = 0;
+		foreach UtilityItems(ItemState)
+		{
+			if (ItemState.GetMyTemplateName() == ItemTemplateName)
+			{
+				MergableItems.AddItem(ItemState);
+				if (!ItemState.bMergedOut && BaseItem == none)
+				{
+					`log("Base item found:" @ ItemTemplateName,, 'Refill items');
+					BaseItem = ItemState;
+					if (X2WeaponTemplate(ItemState.GetMyTemplate()) != none)
+					{
+						BaseAmmo = X2WeaponTemplate(ItemState.GetMyTemplate()).iClipSize;
+						`log(ItemTemplateName @ "ammo is" @ BaseAmmo,, 'Refill items');
+					}
+				}
+			}
+		}
+
+		if (BaseAmmo > 0 && BaseItem != none)
+		{
+			MergableItems.RemoveItem(BaseItem);
+			NewBaseItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', BaseItem.ObjectID));
+			NewGameState.AddStateObject(NewBaseItemState);
+			`log("Beginning separating item for base item" @ ItemTemplateName @ "with ammo" @ BaseItem.Ammo,, 'Refill items');
+			foreach MergableItems(ItemState)
+			{
+				if (class'WaveCOM_MissionLogic_WaveCOM'.default.REFILL_ITEM_CHARGES)
+				{
+						NewItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', ItemState.ObjectID));
+						NewGameState.AddStateObject(NewItemState);
+						NewItemState.Ammo = BaseAmmo;
+						NewItemState.bMergedOut = false;
+						`log("Refilled" @ ItemState.GetReference().ObjectID @ "to" @ BaseAmmo,, 'Refill items');
+				}
+				else
+				{
+					if (NewBaseItemState.Ammo > BaseAmmo - ItemState.Ammo)
+					{
+						NewItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', ItemState.ObjectID));
+						NewGameState.AddStateObject(NewItemState);
+						NewBaseItemState.Ammo -= BaseAmmo - NewItemState.Ammo;
+						NewItemState.Ammo = BaseAmmo;
+						NewItemState.bMergedOut = false;
+						`log("Refilled" @ ItemState.GetReference().ObjectID @ "to" @ BaseAmmo $", base item ammo remaining:" @ BaseItem.Ammo,, 'Refill items');
+					}
+					else if (ItemState.Ammo == 0)
+					{
+						// Item charge exhausted, remove item
+						Unit.RemoveItemFromInventory(ItemState, NewGameState);
+						`log(ItemState.GetReference().ObjectID @ "exhausted",, 'Refill items');
+					}
+				}
+			}
+			if (NewBaseItemState.Ammo > BaseAmmo || class'WaveCOM_MissionLogic_WaveCOM'.default.REFILL_ITEM_CHARGES)
+			{
+				// Remove bonus ammo, they will be reinitialized
+				NewBaseItemState.Ammo = BaseAmmo;
+				`log("Base ammo replenished to max",, 'Refill items');
+			}
+			else if (NewBaseItemState.Ammo == 0)
+			{
+				Unit.RemoveItemFromInventory(NewBaseItemState, NewGameState);
+				`log(NewBaseItemState.GetReference().ObjectID @ "exhausted",, 'Refill items');
+			}
+			NewBaseItemState.MergedItemCount = 1;
+		}
+	}
+
+	// Also refresh heavy weapons
+	ItemState = Unit.GetItemInSlot(eInvSlot_HeavyWeapon);
+
+	if (ItemState != none)
+	{
+		// It's indeed a heavy weapon with ammo
+		if (X2WeaponTemplate(ItemState.GetMyTemplate()) != none)
+		{			
+			if (class'WaveCOMTacticalGameRuleset'.default.REFILL_ITEM_CHARGES)
+			{
+				// Remove bonus ammo, they will be reinitialized
+				NewItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', ItemState.ObjectID));
+				NewGameState.AddStateObject(NewItemState);
+				NewItemState.Ammo = X2WeaponTemplate(ItemState.GetMyTemplate()).iClipSize;
+				`log("Base ammo replenished to max",, 'Refill items');
+			}
+			else if (NewItemState.Ammo == 0)
+			{
+				Unit.RemoveItemFromInventory(ItemState, NewGameState);
+				`log(NewBaseItemState.GetReference().ObjectID @ "exhausted",, 'Refill items');
+			}
+		}
+	}
+	
+	Unit.ValidateLoadout(NewGameState);
+
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
+	super.PopulateData();
 }
 
 

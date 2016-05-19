@@ -113,21 +113,7 @@ simulated function bool EquipItem(UIArmory_LoadoutItem Item)
 			`XSTRATEGYSOUNDMGR.PlaySoundEvent(X2EquipmentTemplate(Item.ItemTemplate).EquipSound);
 		}
 
-		if(X2EquipmentTemplate(Item.ItemTemplate).EquipNarrative != "")
-		{
-			EquipNarrativeMoment = XComNarrativeMoment(`CONTENT.RequestGameArchetype(X2EquipmentTemplate(Item.ItemTemplate).EquipNarrative));
-			XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
-			if(EquipNarrativeMoment != None && XComHQ.CanPlayArmorIntroNarrativeMoment(EquipNarrativeMoment))
-			{
-				UpdatedState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Update Played Armor Intro List");
-				XComHQ = XComGameState_HeadquartersXCom(UpdatedState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
-				UpdatedState.AddStateObject(XComHQ);
-				XComHQ.UpdatePlayedArmorIntroNarrativeMoments(EquipNarrativeMoment);
-				`XCOMGAME.GameRuleset.SubmitGameState(UpdatedState);
-
-				`HQPRES.UIArmorIntroCinematic(EquipNarrativeMoment.nmRemoteEvent, 'CIN_ArmorIntro_Done', UnitReference);
-			}
-		}	
+		// Removed Equipment narrative as it could cause problems outside of the avenger, besides the old code will ensure crashes when equiping items from alien hunters DLC
 	}
 
 	return EquipSucceeded;

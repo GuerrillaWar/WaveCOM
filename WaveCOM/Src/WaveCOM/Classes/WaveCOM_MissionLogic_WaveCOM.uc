@@ -1,5 +1,7 @@
 class WaveCOM_MissionLogic_WaveCOM extends XComGameState_MissionLogic config(WaveCOM);
 
+var config bool REFILL_ITEM_CHARGES;
+
 enum eWaveStatus
 {
 	eWaveStatus_Preparation,
@@ -116,7 +118,7 @@ function InitiateWave()
 	local XComGameState_HeadquartersAlien AlienHQ;
 	local XComGameState NewGameState;
 	local array<WaveEncounter> WeightedStack;
-	local XComGameState_AIReinforcementSpawner Spawner;
+	local WaveCOM_NonstackingReinforcements Spawner;
 	local WaveEncounter Encounter;
 	local int Pods, Weighting, ForceLevel;
 	local Vector ObjectiveLocation;
@@ -176,7 +178,7 @@ function InitiateWave()
 	while (Pods > 0 )
 	{
 		Encounter = WeightedStack[Rand(WeightedStack.Length)];
-		class'XComGameState_AIReinforcementSpawner'.static.InitiateReinforcements(
+		class'WaveCOM_NonstackingReinforcements'.static.InitiateReinforcements(
 			Encounter.EncounterID,
 			1, // FlareTimer
 			true, // bUseOverrideTargetLocation,
@@ -188,9 +190,9 @@ function InitiateWave()
 
 	
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Force Reinforcement ForceLevel");
-	foreach History.IterateByClassType(class'XComGameState_AIReinforcementSpawner', Spawner)
+	foreach History.IterateByClassType(class'WaveCOM_NonstackingReinforcements', Spawner)
 	{
-		Spawner = XComGameState_AIReinforcementSpawner(NewGameState.CreateStateObject(class'XComGameState_AIReinforcementSpawner', Spawner.ObjectID));
+		Spawner = WaveCOM_NonstackingReinforcements(NewGameState.CreateStateObject(class'XComGameState_AIReinforcementSpawner', Spawner.ObjectID));
 
 		// Pod Selection is hidden inside native code, however this function seems to do the trick, so we'll go with this
 		`SPAWNMGR.SelectPodAtLocation(Spawner.SpawnInfo, ForceLevel, 1);

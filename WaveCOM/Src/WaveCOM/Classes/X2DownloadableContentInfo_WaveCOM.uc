@@ -303,3 +303,36 @@ private static function GetItemsToUpgrade(X2ItemTemplate UpgradeItemTemplate, ou
 		GetItemsToUpgrade(BaseItemTemplate, ItemsToUpgrade);
 	}
 }
+
+exec function AddItemWaveCom(string strItemTemplate, optional int Quantity = 1, optional bool bLoot = false)
+{
+	local X2ItemTemplateManager ItemManager;
+	local X2ItemTemplate ItemTemplate;
+	local XComGameState NewGameState;
+	local XComGameState_Item ItemState;
+	local XComGameState_HeadquartersXCom HQState;
+	local XComGameStateHistory History;
+
+	ItemManager = class'X2ItemTemplateManager'.static.GetItemTemplateManager();
+	ItemTemplate = ItemManager.FindItemTemplate(name(strItemTemplate));
+	if (ItemTemplate == none)
+	{
+		`log("No item template named" @ strItemTemplate @ "was found.");
+		return;
+	}
+	History = `XCOMHISTORY;
+	HQState = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+	`assert(HQState != none);
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Add Item Cheat: Create Item");
+	ItemState = ItemTemplate.CreateInstanceFromTemplate(NewGameState);
+	NewGameState.AddStateObject(ItemState);
+	if (Quantity > 0)
+		ItemState.Quantity = Quantity;
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Add Item Cheat: Complete");
+	HQState = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', HQState.ObjectID));
+	HQState.PutItemInInventory(NewGameState, ItemState, bLoot);
+	NewGameState.AddStateObject(HQState);
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	`log("Added item" @ strItemTemplate @ "object id" @ ItemState.ObjectID);
+}

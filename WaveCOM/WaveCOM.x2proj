@@ -72,6 +72,9 @@ Known Issues
     <Content Include="Src\WaveCOM\Classes\WaveCOM_MissionLogic_WaveCOM.uc">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_NonstackingReinforcements.uc">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UIArmory_FieldLoadout.uc">
       <SubType>Content</SubType>
     </Content>
@@ -79,6 +82,9 @@ Known Issues
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UIAvengerHUD.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UIInventory_PCS.uc">
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UILoadoutButton.uc">
