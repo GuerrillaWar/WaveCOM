@@ -1,4 +1,4 @@
-class WaveCOM_MissionLogic_WaveCOM extends X2MissionLogic config(WaveCOM);
+class WaveCOM_MissionLogic_WaveCOM extends XComGameState_MissionLogic config(WaveCOM);
 
 enum eWaveStatus
 {
@@ -35,8 +35,14 @@ var const config array<WaveEncounter> WaveEncounters;
 
 delegate EventListenerReturn OnEventDelegate(Object EventData, Object EventSource, XComGameState GameState, Name EventID);
 
+function SetupMissionStartState(XComGameState StartState)
+{
+	`log("WaveCOM :: Setting Up State");
+}
+
 function RegisterEventHandlers()
 {	
+	`log("WaveCOM :: Setting Up Event Handlers");
 	OnAlienTurnBegin(Countdown);
 	OnNoPlayableUnitsRemaining(HandleTeamDead);
 }
@@ -64,11 +70,13 @@ function EventListenerReturn Countdown(Object EventData, Object EventSource, XCo
 
 	if (WaveStatus == eWaveStatus_Preparation)
 	{
+
 		CombatStartCountdown = CombatStartCountdown - 1;
+		`log("WaveCOM :: Counting Down - " @ CombatStartCountdown);
 
 		History = `XCOMHISTORY;
 	
-		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Collect Wave Loot");
+		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Collect Wave Loot during Preparation");
 		XComHQ = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
 		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
 		NewGameState.AddStateObject(XComHQ);
@@ -344,17 +352,6 @@ function CollectLootToHQ()
 			{
 				EffectName = UnitState.AppliedEffectNames[x];
 				EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AppliedEffects[ x ].ObjectID ) );
-				if (EffectState != None)
-				{
-					EffectState.GetX2Effect().UnitEndedTacticalPlay(EffectState, UnitState);
-				}
-				EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
-			}
-
-			for (x = 0; x < UnitState.AffectedByEffectNames.Length; ++x)
-			{
-				EffectName = UnitState.AffectedByEffectNames[x];
-				EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AffectedByEffects[ x ].ObjectID ) );
 				if (EffectState != None)
 				{
 					EffectState.GetX2Effect().UnitEndedTacticalPlay(EffectState, UnitState);

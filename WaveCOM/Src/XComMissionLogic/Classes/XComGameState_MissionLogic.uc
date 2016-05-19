@@ -7,7 +7,7 @@
 //---------------------------------------------------------------------------------------
 
 
-class X2MissionLogic extends XComGameState_BaseObject
+class XComGameState_MissionLogic extends XComGameState_BaseObject
 	dependson(X2TacticalGameRulesetDataStructures);
 
 const UNIT_REMOVED_EVENTPRIORITY = 44; // Lowered priority below that of the Andromedon SwitchToRobot ability trigger (45).
@@ -26,10 +26,8 @@ var private array<XGPlayer> TriggeredNoPlayableUnits_PlayerList;
 delegate OnNoPlayableUnitsRemainingDelegate(XGPlayer TeamOutOfUnits);
 
 
-function RegisterEventHandlers()
-{
-	`log("running this in X2MissionLogic, should be overridden");
-}
+function SetupMissionStartState(XComGameState StartState);
+function RegisterEventHandlers();
 
 function OnAlienTurnBegin(delegate<X2EventManager.OnEventDelegate> NewDelegate)
 {
