@@ -118,7 +118,7 @@ function InitiateWave()
 	local XComGameState_HeadquartersAlien AlienHQ;
 	local XComGameState NewGameState;
 	local array<WaveEncounter> WeightedStack;
-	local WaveCOM_NonstackingReinforcements Spawner;
+	local XComGameState_NonstackingReinforcements Spawner;
 	local WaveEncounter Encounter;
 	local int Pods, Weighting, ForceLevel;
 	local Vector ObjectiveLocation;
@@ -178,7 +178,7 @@ function InitiateWave()
 	while (Pods > 0 )
 	{
 		Encounter = WeightedStack[Rand(WeightedStack.Length)];
-		class'WaveCOM_NonstackingReinforcements'.static.InitiateReinforcements(
+		class'XComGameState_NonstackingReinforcements'.static.InitiateReinforcements(
 			Encounter.EncounterID,
 			1, // FlareTimer
 			true, // bUseOverrideTargetLocation,
@@ -190,9 +190,9 @@ function InitiateWave()
 
 	
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Force Reinforcement ForceLevel");
-	foreach History.IterateByClassType(class'WaveCOM_NonstackingReinforcements', Spawner)
+	foreach History.IterateByClassType(class'XComGameState_NonstackingReinforcements', Spawner)
 	{
-		Spawner = WaveCOM_NonstackingReinforcements(NewGameState.CreateStateObject(class'XComGameState_AIReinforcementSpawner', Spawner.ObjectID));
+		Spawner = XComGameState_NonstackingReinforcements(NewGameState.CreateStateObject(class'XComGameState_AIReinforcementSpawner', Spawner.ObjectID));
 
 		// Pod Selection is hidden inside native code, however this function seems to do the trick, so we'll go with this
 		`SPAWNMGR.SelectPodAtLocation(Spawner.SpawnInfo, ForceLevel, 1);

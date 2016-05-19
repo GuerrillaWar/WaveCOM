@@ -33,6 +33,7 @@ Known Issues
     <SteamPublishID>0</SteamPublishID>
     <AssemblyName>WaveCOM</AssemblyName>
     <RootNamespace>WaveCOM</RootNamespace>
+    <ProjectGuid>{1523996b-5e41-458e-be0b-9bbdcb153d57}</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
     <Folder Include="Config\" />
@@ -72,9 +73,6 @@ Known Issues
     <Content Include="Src\WaveCOM\Classes\WaveCOM_MissionLogic_WaveCOM.uc">
       <SubType>Content</SubType>
     </Content>
-    <Content Include="Src\WaveCOM\Classes\WaveCOM_NonstackingReinforcements.uc">
-      <SubType>Content</SubType>
-    </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UIArmory_FieldLoadout.uc">
       <SubType>Content</SubType>
     </Content>
@@ -95,6 +93,9 @@ Known Issues
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\XComMissionLogic\Classes\XComGameState_MissionLogic.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\XComMissionLogic\Classes\XComGameState_NonstackingReinforcements.uc">
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\XComMissionLogic\Classes\XComMissionLogic_Listener.uc">

@@ -1,4 +1,4 @@
-class WaveCOM_NonstackingReinforcements extends XComGameState_AIReinforcementSpawner;
+class XComGameState_NonstackingReinforcements extends XComGameState_AIReinforcementSpawner;
 
 static function InitiateReinforcements(
 	Name EncounterID, 
@@ -9,7 +9,7 @@ static function InitiateReinforcements(
 	optional XComGameState IncomingGameState,
 	optional bool InKismetInitiatedReinforcements)
 {
-	local WaveCOM_NonstackingReinforcements NewAIReinforcementSpawnerState, ExistingSpawnerState;
+	local XComGameState_NonstackingReinforcements NewAIReinforcementSpawnerState, ExistingSpawnerState;
 	local XComGameState NewGameState;
 	local XComTacticalMissionManager MissionManager;
 	local ConfigurableEncounter Encounter;
@@ -30,7 +30,7 @@ static function InitiateReinforcements(
 		NewGameState = IncomingGameState;
 
 	// Update AIPlayerData with CallReinforcements data.
-	NewAIReinforcementSpawnerState = WaveCOM_NonstackingReinforcements(NewGameState.CreateStateObject(class'WaveCOM_NonstackingReinforcements'));
+	NewAIReinforcementSpawnerState = XComGameState_NonstackingReinforcements(NewGameState.CreateStateObject(class'XComGameState_NonstackingReinforcements'));
 	NewAIReinforcementSpawnerState.SpawnInfo.EncounterID = EncounterID;
 
 	if( OverrideCountdown > 0 )
@@ -69,7 +69,7 @@ static function InitiateReinforcements(
 			return;
 		}
 		ReinforcementsCleared = true;
-		foreach `XCOMHISTORY.IterateByClassType(class'WaveCOM_NonstackingReinforcements', ExistingSpawnerState)
+		foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_NonstackingReinforcements', ExistingSpawnerState)
 		{
 			// Must not be same reinforcements object and must be pending for reinforcements
 			if (ExistingSpawnerState.ObjectID != NewAIReinforcementSpawnerState.ObjectID && ExistingSpawnerState.Countdown > 0)

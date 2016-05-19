@@ -322,7 +322,7 @@ simulated function PopulateData()
 		// It's indeed a heavy weapon with ammo
 		if (X2WeaponTemplate(ItemState.GetMyTemplate()) != none)
 		{			
-			if (class'WaveCOMTacticalGameRuleset'.default.REFILL_ITEM_CHARGES)
+			if (class'WaveCOM_MissionLogic_WaveCOM'.default.REFILL_ITEM_CHARGES)
 			{
 				// Remove bonus ammo, they will be reinitialized
 				NewItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', ItemState.ObjectID));
