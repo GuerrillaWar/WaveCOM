@@ -65,6 +65,7 @@ function EventListenerReturn Countdown(Object EventData, Object EventSource, XCo
 {
 	local XComGameStateHistory History;
 	local XComGameState NewGameState;
+	local WaveCOM_MissionLogic_WaveCOM NewMissionState;
 	local XComGameState_HeadquartersXCom XComHQ;
 	local XComGameState_Item ItemState;
 	local array<XComGameState_Item> ItemStates;
@@ -79,8 +80,11 @@ function EventListenerReturn Countdown(Object EventData, Object EventSource, XCo
 		History = `XCOMHISTORY;
 	
 		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Collect Wave Loot during Preparation");
+		NewMissionState = WaveCOM_MissionLogic_WaveCOM(NewGameState.CreateStateObject(class'WaveCOM_MissionLogic_WaveCOM', ObjectID));
+		NewMissionState.CombatStartCountdown = CombatStartCountdown;
 		XComHQ = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
 		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
+		NewGameState.AddStateObject(NewMissionState);
 		NewGameState.AddStateObject(XComHQ);
 
 		// recover loot collected during preparation turns
@@ -117,6 +121,7 @@ function InitiateWave()
 	local XComGameState_BattleData BattleData;
 	local XComGameState_HeadquartersAlien AlienHQ;
 	local XComGameState NewGameState;
+	local WaveCOM_MissionLogic_WaveCOM NewMissionState;
 	local array<WaveEncounter> WeightedStack;
 	local XComGameState_NonstackingReinforcements Spawner;
 	local WaveEncounter Encounter;
@@ -150,6 +155,11 @@ function InitiateWave()
 	BattleData.SetForceLevel(ForceLevel);
 	`SPAWNMGR.ForceLevel = ForceLevel;
 	NewGameState.AddStateObject(BattleData);
+
+	NewMissionState = WaveCOM_MissionLogic_WaveCOM(NewGameState.CreateStateObject(class'WaveCOM_MissionLogic_WaveCOM', ObjectID));
+	NewMissionState.WaveStatus = WaveStatus;
+	NewMissionState.WaveNumber = WaveNumber;
+	NewGameState.AddStateObject(NewMissionState);
 	
 	if (WaveNumber > WaveCOMPodCount.Length - 1)
 	{
@@ -382,9 +392,20 @@ function CollectLootToHQ()
 
 function BeginPreparationRound()
 {
+	local XComGameState NewGameState;
+	local WaveCOM_MissionLogic_WaveCOM NewMissionState;
+
 	WaveStatus = eWaveStatus_Preparation;
 	CombatStartCountdown = 3;
 	CollectLootToHQ();
+
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Collect Wave Loot during Preparation");
+	NewMissionState = WaveCOM_MissionLogic_WaveCOM(NewGameState.CreateStateObject(class'WaveCOM_MissionLogic_WaveCOM', ObjectID));
+	NewMissionState.CombatStartCountdown = CombatStartCountdown;
+	NewMissionState.WaveStatus = WaveStatus;
+	NewGameState.AddStateObject(NewMissionState);
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
 	UpdateCombatCountdown();
 	`XEVENTMGR.TriggerEvent('WaveCOM_WaveEnd');
 }
