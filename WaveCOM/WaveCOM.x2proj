@@ -73,6 +73,9 @@ Known Issues
     <Content Include="Src\WaveCOM\Classes\WaveCOM_MissionLogic_WaveCOM.uc">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_MissionSet.uc">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UIArmory_FieldLoadout.uc">
       <SubType>Content</SubType>
     </Content>
