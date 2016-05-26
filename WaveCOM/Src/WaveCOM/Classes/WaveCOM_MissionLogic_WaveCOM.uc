@@ -230,7 +230,6 @@ function CollectLootToHQ()
 {
 	local XComGameStateHistory History;
 	local XComGameState NewGameState;
-	local name EffectName;
 	local XComGameState_Effect EffectState;
 	local XComGameState_BattleData BattleData;
 	local XComGameState_HeadquartersXCom XComHQ;
@@ -362,7 +361,6 @@ function CollectLootToHQ()
 
 			for (x = 0; x < UnitState.AppliedEffectNames.Length; ++x)
 			{
-				EffectName = UnitState.AppliedEffectNames[x];
 				EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AppliedEffects[ x ].ObjectID ) );
 				if (EffectState != None)
 				{

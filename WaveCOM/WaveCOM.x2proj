@@ -85,6 +85,15 @@ Known Issues
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UIAvengerHUD.uc">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UICustomize_Menu.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UICustomize_Props.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UICustomize_Trait.uc">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UIInventory_PCS.uc">
       <SubType>Content</SubType>
     </Content>

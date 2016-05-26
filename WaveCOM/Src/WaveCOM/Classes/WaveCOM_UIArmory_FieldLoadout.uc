@@ -51,20 +51,16 @@ function UpdateActiveUnit()
 {
 	local XComGameState_Unit Unit;
 	local XComGameState NewGameState;
-	local name EffectName;
 	local XComGameState_Effect EffectState;
 	local Vector SpawnLocation;
 	local XGUnit Visualizer;
-	local XComGameStateHistory History;
 	local StateObjectReference ItemReference, AbilityReference;
 	local XComGameState_Item ItemState;
-	local XComGameState_Ability AbilityState;
 	local X2EquipmentTemplate EquipmentTemplate;
 	local XComWorldData WorldData;
 	local XComAISpawnManager SpawnManager;
 	local int ix;
 
-	History = `XCOMHISTORY;
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Update Abilities");
 
 	Unit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
@@ -80,7 +76,6 @@ function UpdateActiveUnit()
 
 	for (ix = 0; ix < Unit.AppliedEffectNames.Length; ++ix)
 	{
-		EffectName = Unit.AppliedEffectNames[ix];
 		EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( Unit.AppliedEffects[ ix ].ObjectID ) );
 		if (EffectState != None)
 		{
@@ -148,7 +143,7 @@ function SetTacHUDScreen(UITacticalHUD Screenie)
 function Push_UICustomize_Menu(XComGameState_Unit UnitRef, Actor ActorPawnA)
 {
 	TacHUDScreen.Movie.Pres.InitializeCustomizeManager(UnitRef);
-	TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'UICustomize_Menu', TacHUDScreen));
+	TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'WaveCOM_UICustomize_Menu', TacHUDScreen));
 }
 
 function Push_UIArmory_Implants(StateObjectReference UnitRef)
@@ -207,13 +202,11 @@ simulated function PopulateData()
 	local XComGameState_Unit Unit;
 	local XComGameState_Item ItemState, NewItemState, NewBaseItemState, BaseItem;
 	local XComGameState NewGameState;
-	local XComGameStateHistory History;
 	local array<name> UtilityItemTypes;
 	local name ItemTemplateName;
 	local array<XComGameState_Item> UtilityItems, GrenadeItems, MergableItems;
 	local int BaseAmmo; 
 
-	History = `XCOMHISTORY;
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh unit consumables");
 
 	Unit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));

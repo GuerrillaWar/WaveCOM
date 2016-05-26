@@ -8,7 +8,6 @@ simulated function bool EquipItem(UIArmory_LoadoutItem Item)
 	local XComGameState_Item PrevItem, NewItem;
 	local bool CanEquip, EquipSucceeded, AddToFront;
 	local XComGameState_HeadquartersXCom XComHQ;
-	local XComNarrativeMoment EquipNarrativeMoment;
 	local XGWeapon Weapon;
 	local XGItem ItemVisualizer;
 	local array<XComGameState_Item> PrevUtilityItems;
