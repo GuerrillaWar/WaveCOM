@@ -45,6 +45,7 @@ function SetupMissionStartState(XComGameState StartState)
 function RegisterEventHandlers()
 {	
 	`log("WaveCOM :: Setting Up Event Handlers");
+
 	OnAlienTurnBegin(Countdown);
 	OnNoPlayableUnitsRemaining(HandleTeamDead);
 }

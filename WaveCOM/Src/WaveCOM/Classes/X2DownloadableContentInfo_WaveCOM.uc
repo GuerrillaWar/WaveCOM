@@ -30,8 +30,6 @@ static event InstallNewCampaign(XComGameState StartState)
 
 	`log("XComMissionLogic :: InstallNewCampaign");
 
-	UpdateResearchTemplates();
-	UpdateSchematicTemplates();
 	MakeAllTechInstant(StartState);
 }
 
@@ -44,9 +42,6 @@ static event OnLoadedSavedGame()
 	MissionListener = XComMissionLogic_Listener(NewGameState.CreateStateObject(class'XComMissionLogic_Listener'));
 	MissionListener.RegisterToListen();
 	NewGameState.AddStateObject(MissionListener);
-
-	UpdateResearchTemplates();
-	UpdateSchematicTemplates();
 
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 	`log("XComMissionLogic :: OnLoadedSavedGame");

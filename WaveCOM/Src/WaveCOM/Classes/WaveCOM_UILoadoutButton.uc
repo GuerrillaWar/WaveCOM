@@ -17,6 +17,9 @@ event OnInit(UIScreen Screen)
 
 	CurrentDeployCost = 50;
 
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchTemplates();
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateSchematicTemplates();
+
 	TacHUDScreen = UITacticalHUD(Screen);
 	`log("Loading my button thing.");
 
