@@ -105,6 +105,7 @@ static function UpdateUnit(int UnitID)
 	local Vector SpawnLocation;
 	local XGUnit Visualizer;
 	local StateObjectReference ItemReference;
+	local StateObjectReference AbilityReference;
 	local XComGameState_Item ItemState;
 	local X2EquipmentTemplate EquipmentTemplate;
 	local XComWorldData WorldData;
@@ -112,6 +113,13 @@ static function UpdateUnit(int UnitID)
 
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh Inventory");
 	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitID));
+
+	`log("Cleaning Abilities");
+	foreach Unit.Abilities(AbilityReference)
+	{
+		NewGameState.RemoveStateObject(AbilityReference.ObjectID);
+	}
+	Unit.Abilities.Length = 0;
 
 	`log("Reintroducing Inventory");
 	foreach Unit.InventoryItems(ItemReference)
@@ -240,14 +248,6 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 static function CleanUpStats(XComGameState NewGameState, XComGameState_Unit UnitState)
 {
 	local XComGameState_Effect EffectState;
-	local StateObjectReference AbilityReference;
-
-	`log("Cleaning Abilities");
-	foreach UnitState.Abilities(AbilityReference)
-	{
-		NewGameState.RemoveStateObject(AbilityReference.ObjectID);
-	}
-	UnitState.Abilities.Length = 0;
 
 	while ( UnitState.AppliedEffectNames.Length > 0)
 	{
@@ -260,7 +260,14 @@ static function CleanUpStats(XComGameState NewGameState, XComGameState_Unit Unit
 	}
 }
 
-simulated function PopulateData()
+simulated function InitArmory(StateObjectReference UnitRef, optional name DispEvent, optional name SoldSpawnEvent, optional name NavBackEvent, optional name HideEvent, optional name RemoveEvent, optional bool bInstant = false, optional XComGameState InitCheckGameState)
+{
+	UnitReference = UnitRef;
+	ResetUnitState();
+	super.InitArmory(UnitRef, DispEvent, SoldSpawnEvent, NavBackEvent, HideEvent, RemoveEvent, bInstant, InitCheckGameState);
+}
+
+simulated function ResetUnitState()
 {
 	local XComGameState_Unit Unit;
 	local XComGameState_Item ItemState, NewItemState, NewBaseItemState, BaseItem;
@@ -269,6 +276,7 @@ simulated function PopulateData()
 	local name ItemTemplateName;
 	local array<XComGameState_Item> UtilityItems, GrenadeItems, MergableItems;
 	local int BaseAmmo; 
+	local object ThisObj;
 
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh unit consumables");
 
@@ -398,15 +406,39 @@ simulated function PopulateData()
 	
 	Unit.ValidateLoadout(NewGameState);
 	
+	ThisObj = self;
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'HACK_OnGameStateSubmittedFieldLoadout', OnGameStateSubmitted, ELD_OnStateSubmitted);
+	`XEVENTMGR.TriggerEvent('HACK_OnGameStateSubmittedFieldLoadout');
+	
 	XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = Unit.GetReference();
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
-
-	super.PopulateData();
-
-	XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController()).bManuallySwitchedUnitsWhileVisualizerBusy = true;
-	XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController()).Visualizer_SelectUnit(Unit);
 }
 
+function EventListenerReturn OnGameStateSubmitted(Object EventData, Object EventSource, XComGameState GameState, Name EventID)
+{
+	local XComGameState_Unit UnitState;
+	local object ThisObj;
+
+	UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
+
+	XComTacticalController(PC).bManuallySwitchedUnitsWhileVisualizerBusy = true;
+	XComTacticalController(PC).Visualizer_SelectUnit(UnitState);
+
+	ThisObj = self;
+	`XEVENTMGR.UnRegisterFromEvent(ThisObj, 'HACK_OnGameStateSubmittedFieldLoadout');
+
+	return ELR_NoInterrupt;
+}
+
+simulated function PrevSoldier()
+{
+	// Do not switch soldiers in this screen
+}
+
+simulated function NextSoldier()
+{
+	// Do not switch soldiers in this screen
+}
 
 defaultproperties
 {

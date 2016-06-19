@@ -369,7 +369,6 @@ function CollectLootToHQ()
 				EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
 			}
 
-			UnitState.Abilities.Remove(0, UnitState.Abilities.Length);
 			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 			
 			class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnit(UnitState.GetReference().ObjectID);
