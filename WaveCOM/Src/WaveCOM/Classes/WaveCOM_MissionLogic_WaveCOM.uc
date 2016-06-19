@@ -245,7 +245,6 @@ function CollectLootToHQ()
 	local LootResults PendingAutoLoot;
 	local Name LootTemplateName;
 	local array<Name> RolledLoot;
-	local int x;
 
 	History = `XCOMHISTORY;
 	
@@ -360,9 +359,9 @@ function CollectLootToHQ()
 				NewGameState.RemoveStateObject(AbilityReference.ObjectID);
 			}
 
-			for (x = 0; x < UnitState.AppliedEffectNames.Length; ++x)
+			while (UnitState.AppliedEffectNames.Length > 0)
 			{
-				EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AppliedEffects[ x ].ObjectID ) );
+				EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AppliedEffects[ 0 ].ObjectID ) );
 				if (EffectState != None)
 				{
 					EffectState.GetX2Effect().UnitEndedTacticalPlay(EffectState, UnitState);
@@ -372,19 +371,8 @@ function CollectLootToHQ()
 
 			UnitState.Abilities.Remove(0, UnitState.Abilities.Length);
 			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
-
-
-			NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refill Unit State");
-			UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
-			`TACTICALRULES.InitializeUnitAbilities(NewGameState, UnitState);
-
-			if (UnitState.FindAbility('Phantom').ObjectID > 0)
-			{
-				UnitState.EnterConcealmentNewGameState(NewGameState);
-			}
-			NewGameState.AddStateObject(UnitState);
-			XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = UnitState.GetReference();
-			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+			
+			class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnit(UnitState.GetReference().ObjectID);
 		}
 	}
 }
@@ -404,6 +392,8 @@ function BeginPreparationRound()
 	NewMissionState.WaveStatus = WaveStatus;
 	NewGameState.AddStateObject(NewMissionState);
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
+	//`XCOMHISTORY.ArchiveHistory("Wave" @ NewMissionState.WaveNumber);
 
 	UpdateCombatCountdown();
 	`XEVENTMGR.TriggerEvent('WaveCOM_WaveEnd');

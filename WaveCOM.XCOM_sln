@@ -7,9 +7,12 @@ Project("{5DAE07AF-E217-45C1-8DE7-FF99D6011E8A}") = "WaveCOM", "WaveCOM\WaveCOM.
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|XCOM 2 = Debug|XCOM 2
 		Default|XCOM 2 = Default|XCOM 2
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1523996B-5E41-458E-BE0B-9BBDCB153D57}.Debug|XCOM 2.ActiveCfg = Debug|XCOM 2
+		{1523996B-5E41-458E-BE0B-9BBDCB153D57}.Debug|XCOM 2.Build.0 = Debug|XCOM 2
 		{1523996B-5E41-458E-BE0B-9BBDCB153D57}.Default|XCOM 2.ActiveCfg = Default|XCOM 2
 		{1523996B-5E41-458E-BE0B-9BBDCB153D57}.Default|XCOM 2.Build.0 = Default|XCOM 2
 	EndGlobalSection
