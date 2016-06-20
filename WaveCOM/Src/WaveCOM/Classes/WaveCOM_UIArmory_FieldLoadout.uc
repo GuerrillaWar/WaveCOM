@@ -49,40 +49,77 @@ simulated function OnAccept()
 
 function UpdateActiveUnit()
 {
+	UpdateUnit(UnitReference.ObjectID);
+}
+
+static function MergeAmmoAsNeeded(XComGameState StartState, XComGameState_Unit Unit)
+{
+	local XComGameState_Item ItemIter, ItemInnerIter;
+	local X2WeaponTemplate MergeTemplate;
+	local int Idx, InnerIdx, BonusAmmo;
+	local bool bFieldMedic, bHeavyOrdnance;
+
+	bFieldMedic = Unit.HasSoldierAbility('FieldMedic');
+	bHeavyOrdnance = Unit.HasSoldierAbility('HeavyOrdnance');
+
+	for (Idx = 0; Idx < Unit.InventoryItems.Length; ++Idx)
+	{
+		ItemIter = XComGameState_Item(StartState.GetGameStateForObjectID(Unit.InventoryItems[Idx].ObjectID));
+		if (ItemIter != none && !ItemIter.bMergedOut)
+		{
+			MergeTemplate = X2WeaponTemplate(ItemIter.GetMyTemplate());
+			if (MergeTemplate != none && MergeTemplate.bMergeAmmo)
+			{
+				BonusAmmo = 0;
+
+				if (bFieldMedic && ItemIter.GetWeaponCategory() == class'X2Item_DefaultUtilityItems'.default.MedikitCat)
+					BonusAmmo += class'X2Ability_SpecialistAbilitySet'.default.FIELD_MEDIC_BONUS;
+				if (bHeavyOrdnance && ItemIter.InventorySlot == eInvSlot_GrenadePocket)
+					BonusAmmo += class'X2Ability_GrenadierAbilitySet'.default.ORDNANCE_BONUS;
+
+				ItemIter.MergedItemCount = 1;
+				for (InnerIdx = Idx + 1; InnerIdx < Unit.InventoryItems.Length; ++InnerIdx)
+				{
+					ItemInnerIter = XComGameState_Item(StartState.GetGameStateForObjectID(Unit.InventoryItems[InnerIdx].ObjectID));
+					if (ItemInnerIter != none && ItemInnerIter.GetMyTemplate() == MergeTemplate)
+					{
+						if (bFieldMedic && ItemInnerIter.GetWeaponCategory() == class'X2Item_DefaultUtilityItems'.default.MedikitCat)
+							BonusAmmo += class'X2Ability_SpecialistAbilitySet'.default.FIELD_MEDIC_BONUS;
+						if (bHeavyOrdnance && ItemInnerIter.InventorySlot == eInvSlot_GrenadePocket)
+							BonusAmmo += class'X2Ability_GrenadierAbilitySet'.default.ORDNANCE_BONUS;
+						ItemInnerIter.bMergedOut = true;
+						ItemInnerIter.Ammo = 0;
+						ItemIter.MergedItemCount++;
+					}
+				}
+				ItemIter.Ammo = ItemIter.GetClipSize() * ItemIter.MergedItemCount + BonusAmmo;
+			}
+		}
+	}
+}
+
+static function UpdateUnit(int UnitID)
+{
 	local XComGameState_Unit Unit;
 	local XComGameState NewGameState;
-	local XComGameState_Effect EffectState;
 	local Vector SpawnLocation;
 	local XGUnit Visualizer;
-	local StateObjectReference ItemReference, AbilityReference;
+	local StateObjectReference ItemReference;
+	local StateObjectReference AbilityReference;
 	local XComGameState_Item ItemState;
 	local X2EquipmentTemplate EquipmentTemplate;
 	local XComWorldData WorldData;
 	local XComAISpawnManager SpawnManager;
-	local int ix;
 
-	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Update Abilities");
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh Inventory");
+	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitID));
 
-	Unit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
-	WorldData = `XWORLD;
-	SpawnManager = `SPAWNMGR;
-
-	`log("Cleaning and readding Abilities");
+	`log("Cleaning Abilities");
 	foreach Unit.Abilities(AbilityReference)
 	{
 		NewGameState.RemoveStateObject(AbilityReference.ObjectID);
 	}
-	Unit.Abilities.Remove(0, Unit.Abilities.Length);
-
-	for (ix = 0; ix < Unit.AppliedEffectNames.Length; ++ix)
-	{
-		EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( Unit.AppliedEffects[ ix ].ObjectID ) );
-		if (EffectState != None)
-		{
-			EffectState.GetX2Effect().UnitEndedTacticalPlay(EffectState, Unit);
-		}
-		EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
-	}
+	Unit.Abilities.Length = 0;
 
 	`log("Reintroducing Inventory");
 	foreach Unit.InventoryItems(ItemReference)
@@ -91,13 +128,6 @@ function UpdateActiveUnit()
 		`log("Adding " @ItemState.GetMyTemplateName());
 		NewGameState.AddStateObject(ItemState);
 	}
-
-	Visualizer = XGUnit(Unit.FindOrCreateVisualizer());
-	Unit.SyncVisualizer(NewGameState);
-	Visualizer.ApplyLoadoutFromGameState(Unit, NewGameState);
-	XComHumanPawn(Visualizer.GetPawn()).SetAppearance(Unit.kAppearance);
-
-	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 	
 	foreach Unit.InventoryItems(ItemReference)
 	{
@@ -113,14 +143,31 @@ function UpdateActiveUnit()
 		}
 	}
 
-	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Reinit Abilities");
-	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitReference.ObjectID));
+	MergeAmmoAsNeeded(NewGameState, Unit);
+
+	WorldData = `XWORLD;
+	SpawnManager = `SPAWNMGR;
+
+	Visualizer = XGUnit(Unit.FindOrCreateVisualizer());
+	Unit.SyncVisualizer(NewGameState);
+	Visualizer.ApplyLoadoutFromGameState(Unit, NewGameState);
+	XComHumanPawn(Visualizer.GetPawn()).SetAppearance(Unit.kAppearance);
+
+	NewGameState.AddStateObject(Unit);
+	XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = Unit.GetReference();
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Rinit Abilities");
 
 	`TACTICALRULES.InitializeUnitAbilities(NewGameState, Unit);
 	if (Unit.FindAbility('Phantom').ObjectID > 0)
 	{
 		Unit.EnterConcealmentNewGameState(NewGameState);
 	}
+
+	// Remove rupture effect and unshred armor
+	Unit.Ruptured = 0;
+	Unit.Shredded = 0;
 
 	NewGameState.AddStateObject(Unit);
 	XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = Unit.GetReference();
@@ -183,7 +230,9 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 	if (GetUnit().CanRankUpSoldier())
 	{
 		XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom', true));
+		CleanUpStats(NewGameState, UnitState);
 		UnitState.RankUpSoldier(NewGameState, XComHQ.SelectNextSoldierClass());
+		UnitState.ValidateLoadout(NewGameState);
 	}
 	NewGameState.AddStateObject(UnitState);
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
@@ -196,8 +245,29 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 	PromotionUI.InitPromotion(UnitRef, bInstantTransition);
 }
 
+static function CleanUpStats(XComGameState NewGameState, XComGameState_Unit UnitState)
+{
+	local XComGameState_Effect EffectState;
 
-simulated function PopulateData()
+	while ( UnitState.AppliedEffectNames.Length > 0)
+	{
+		EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AppliedEffects[ 0 ].ObjectID ) );
+		if (EffectState != None)
+		{
+			EffectState.GetX2Effect().UnitEndedTacticalPlay(EffectState, UnitState);
+		}
+		EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
+	}
+}
+
+simulated function InitArmory(StateObjectReference UnitRef, optional name DispEvent, optional name SoldSpawnEvent, optional name NavBackEvent, optional name HideEvent, optional name RemoveEvent, optional bool bInstant = false, optional XComGameState InitCheckGameState)
+{
+	UnitReference = UnitRef;
+	ResetUnitState();
+	super.InitArmory(UnitRef, DispEvent, SoldSpawnEvent, NavBackEvent, HideEvent, RemoveEvent, bInstant, InitCheckGameState);
+}
+
+simulated function ResetUnitState()
 {
 	local XComGameState_Unit Unit;
 	local XComGameState_Item ItemState, NewItemState, NewBaseItemState, BaseItem;
@@ -206,11 +276,14 @@ simulated function PopulateData()
 	local name ItemTemplateName;
 	local array<XComGameState_Item> UtilityItems, GrenadeItems, MergableItems;
 	local int BaseAmmo; 
+	local object ThisObj;
 
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh unit consumables");
 
-	Unit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
+	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitReference.ObjectID));
 	NewGameState.AddStateObject(Unit);
+
+	CleanUpStats(NewGameState, Unit);
 
 	UtilityItems = Unit.GetAllItemsInSlot(eInvSlot_Utility);
 	GrenadeItems = Unit.GetAllItemsInSlot(eInvSlot_GrenadePocket);
@@ -332,12 +405,40 @@ simulated function PopulateData()
 	}
 	
 	Unit.ValidateLoadout(NewGameState);
-
+	
+	ThisObj = self;
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'HACK_OnGameStateSubmittedFieldLoadout', OnGameStateSubmitted, ELD_OnStateSubmitted);
+	`XEVENTMGR.TriggerEvent('HACK_OnGameStateSubmittedFieldLoadout');
+	
+	XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = Unit.GetReference();
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
-
-	super.PopulateData();
 }
 
+function EventListenerReturn OnGameStateSubmitted(Object EventData, Object EventSource, XComGameState GameState, Name EventID)
+{
+	local XComGameState_Unit UnitState;
+	local object ThisObj;
+
+	UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
+
+	XComTacticalController(PC).bManuallySwitchedUnitsWhileVisualizerBusy = true;
+	XComTacticalController(PC).Visualizer_SelectUnit(UnitState);
+
+	ThisObj = self;
+	`XEVENTMGR.UnRegisterFromEvent(ThisObj, 'HACK_OnGameStateSubmittedFieldLoadout');
+
+	return ELR_NoInterrupt;
+}
+
+simulated function PrevSoldier()
+{
+	// Do not switch soldiers in this screen
+}
+
+simulated function NextSoldier()
+{
+	// Do not switch soldiers in this screen
+}
 
 defaultproperties
 {

@@ -185,6 +185,8 @@ public function OpenDeployMenu(UIButton Button)
 	local array<StrategyCostScalar> EmptyScalars;
 	local XComGameState NewGameState;
 
+	local TDialogueBoxData  kDialogData;
+
 	History = `XCOMHISTORY;
 	// grab the archived strategy state from the history and the headquarters object
 	XComHQ = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
@@ -193,6 +195,15 @@ public function OpenDeployMenu(UIButton Button)
 	{
 		UpdateDeployCost();
 		UpdateResources();
+		
+		kDialogData.eType = eDialog_Alert;
+		kDialogData.strTitle = "Not enough supplies";
+		kDialogData.strText = "You need" @ CurrentDeployCost @ "to deploy new soldier.";
+
+		kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+
+		`PRES.UIRaiseDialog(kDialogData);
+
 		return;
 	}
 
@@ -211,68 +222,61 @@ public function OpenDeployMenu(UIButton Button)
 		Resources.Quantity = CurrentDeployCost;
 		DeployCost.ResourceCosts.AddItem(Resources);
 		XComHQ.PayStrategyCost(NewGameState, DeployCost, EmptyScalars);
+		XComHQ.Squad.AddItem(StrategyUnit.GetReference());
 		NewGameState.AddStateObject(XComHQ);
 		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 		UpdateDeployCost();
 		UpdateResources();
+	}
+	else
+	{
+		kDialogData.eType = eDialog_Alert;
+		kDialogData.strTitle = "No more reserves";
+		kDialogData.strText = "No more reserves in avenger.\nTODO: Refill avenger reserves";
+
+		kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+
+		`PRES.UIRaiseDialog(kDialogData);
 	}
 }
 
 // Scans the strategy game and chooses a unit to place on the game board
 private static function XComGameState_Unit ChooseStrategyUnit(XComGameStateHistory History)
 {
-	local array<StateObjectReference> UnitsInPlay;
-	local XComGameState_Unit UnitInPlay;
 	local XComGameState_HeadquartersXCom XComHQ;
-	local XComGameState StrategyState;
-	local int LastStrategyStateIndex;
+	local StateObjectReference HQCrew;
 	local XComGameState_Unit StrategyUnit;
 
-	LastStrategyStateIndex = History.FindStartStateIndex() - 1;
-	if(LastStrategyStateIndex > 0)
+	foreach History.IterateByClassType(class'XComGameState_HeadquartersXCom', XComHQ)
 	{
-		// build a list of all units currently on the board, we will exclude them from consideration. Add non-xcom units as well
-		// in case they are mind controlled or otherwise under the control of the enemy team
-		foreach History.IterateByClassType(class'XComGameState_Unit', UnitInPlay)
+		break;
+	}
+
+	if(XComHQ == none)
+	{
+		`Redscreen("SeqAct_SpawnUnitFromAvenger: Could not find an XComGameState_HeadquartersXCom state in the archive!");
+	}
+
+	// and find a unit in the strategy state that is not on the board
+	foreach XComHQ.Crew(HQCrew)
+	{
+		StrategyUnit = XComGameState_Unit(History.GetGameStateForObjectID(HQCrew.ObjectID));
+
+		if (StrategyUnit == none)
+			continue;
+		// only living soldier units please
+		if (StrategyUnit.IsDead() || !StrategyUnit.IsSoldier() || StrategyUnit.IsTraining() || StrategyUnit.Abilities.Length > 0)
 		{
-			UnitsInPlay.AddItem(UnitInPlay.GetReference());
+			continue;
 		}
 
-		// grab the archived strategy state from the history and the headquarters object
-		StrategyState = History.GetGameStateFromHistory(LastStrategyStateIndex, eReturnType_Copy, false);
-		foreach StrategyState.IterateByClassType(class'XComGameState_HeadquartersXCom', XComHQ)
+		// only if not already on the board
+		if(XComHQ.Squad.Find('ObjectID', StrategyUnit.ObjectID) != INDEX_NONE)
 		{
-			break;
+			continue;
 		}
 
-		if(XComHQ == none)
-		{
-			`Redscreen("SeqAct_SpawnUnitFromAvenger: Could not find an XComGameState_HeadquartersXCom state in the archive!");
-		}
-
-		// and find a unit in the strategy state that is not on the board
-		foreach StrategyState.IterateByClassType(class'XComGameState_Unit', StrategyUnit)
-		{
-			// only living soldier units please
-			if (StrategyUnit.IsDead() || !StrategyUnit.IsSoldier() 	|| StrategyUnit.IsTraining())
-			{
-				continue;
-			}
-
-			// only if we have already recruited this soldier
-			if(XComHQ != none && XComHQ.Crew.Find('ObjectID', StrategyUnit.ObjectID) == INDEX_NONE)
-			{
-				continue;
-			}
-
-			// only if not already on the board
-			if(UnitsInPlay.Find('ObjectID', StrategyUnit.ObjectID) != INDEX_NONE)
-			{
-				continue;
-			}
-
-			return StrategyUnit;
-		}
+		return StrategyUnit;
 	}
 
 	return none;

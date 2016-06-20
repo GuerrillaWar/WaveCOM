@@ -35,6 +35,9 @@ Known Issues
     <RootNamespace>WaveCOM</RootNamespace>
     <ProjectGuid>{1523996b-5e41-458e-be0b-9bbdcb153d57}</ProjectGuid>
   </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <OutputPath>bin\Debug\</OutputPath>
+  </PropertyGroup>
   <ItemGroup>
     <Folder Include="Config\" />
     <Folder Include="Content\" />
