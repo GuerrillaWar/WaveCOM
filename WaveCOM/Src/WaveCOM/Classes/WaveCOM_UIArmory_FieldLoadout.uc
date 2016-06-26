@@ -100,11 +100,11 @@ static function MergeAmmoAsNeeded(XComGameState StartState, XComGameState_Unit U
 
 static function UpdateUnit(int UnitID)
 {
-	local XComGameState_Unit Unit;
+	local XComGameState_Unit Unit, CosmeticUnit;
 	local XComGameState NewGameState;
 	local Vector SpawnLocation;
 	local XGUnit Visualizer;
-	local StateObjectReference ItemReference;
+	local StateObjectReference ItemReference, CosmeticUnitRef;
 	local StateObjectReference AbilityReference;
 	local XComGameState_Item ItemState;
 	local X2EquipmentTemplate EquipmentTemplate;
@@ -129,19 +129,7 @@ static function UpdateUnit(int UnitID)
 		NewGameState.AddStateObject(ItemState);
 	}
 	
-	foreach Unit.InventoryItems(ItemReference)
-	{
-		ItemState = XComGameState_Item(NewGameState.GetGameStateForObjectID(ItemReference.ObjectID));
-		if( ItemState.OwnerStateObject.ObjectID == Unit.ObjectID )
-		{
-			EquipmentTemplate = X2EquipmentTemplate(ItemState.GetMyTemplate());
-			if( EquipmentTemplate != none && EquipmentTemplate.CosmeticUnitTemplate != "" && ItemState.CosmeticUnitRef.ObjectID == 0)
-			{
-				SpawnLocation = WorldData.GetPositionFromTileCoordinates(Unit.TileLocation);
-				ItemState.CosmeticUnitRef = SpawnManager.CreateUnit(SpawnLocation, name(EquipmentTemplate.CosmeticUnitTemplate), Unit.GetTeam(), true);
-			}
-		}
-	}
+
 
 	MergeAmmoAsNeeded(NewGameState, Unit);
 
@@ -156,6 +144,34 @@ static function UpdateUnit(int UnitID)
 	NewGameState.AddStateObject(Unit);
 	XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = Unit.GetReference();
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
+	foreach Unit.InventoryItems(ItemReference)
+	{
+		ItemState = XComGameState_Item(NewGameState.GetGameStateForObjectID(ItemReference.ObjectID));
+		if( ItemState.OwnerStateObject.ObjectID == Unit.ObjectID )
+		{
+			EquipmentTemplate = X2EquipmentTemplate(ItemState.GetMyTemplate());
+			if( EquipmentTemplate != none && EquipmentTemplate.CosmeticUnitTemplate != "" && ItemState.CosmeticUnitRef.ObjectID == 0)
+			{
+				SpawnLocation = WorldData.GetPositionFromTileCoordinates(Unit.TileLocation);
+				CosmeticUnitRef = SpawnManager.CreateUnit(SpawnLocation, name(EquipmentTemplate.CosmeticUnitTemplate), Unit.GetTeam(), false);
+
+				CosmeticUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(CosmeticUnitRef.ObjectID));
+				CosmeticUnit.kAppearance.nmPatterns = Unit.kAppearance.nmWeaponPattern;
+				CosmeticUnit.kAppearance.iArmorTint = Unit.kAppearance.iWeaponTint;
+				CosmeticUnit.kAppearance.iArmorTintSecondary = Unit.kAppearance.iArmorTintSecondary;
+				XGUnit(CosmeticUnit.GetVisualizer()).GetPawn().SetAppearance(CosmeticUnit.kAppearance);
+
+				NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Attach Gremlin");
+				ItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', ItemReference.ObjectID));
+				ItemState.CosmeticUnitRef = CosmeticUnitRef;
+				ItemState.OwnerStateObject = Unit.GetReference();
+				ItemState.AttachedUnitRef = Unit.GetReference();
+				NewGameState.AddStateObject(ItemState);
+				`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+			}
+		}
+	}
 	
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Rinit Abilities");
 
@@ -269,12 +285,14 @@ simulated function InitArmory(StateObjectReference UnitRef, optional name DispEv
 
 simulated function ResetUnitState()
 {
-	local XComGameState_Unit Unit;
+	local XComGameState_Unit Unit, CosmeticUnit;
 	local XComGameState_Item ItemState, NewItemState, NewBaseItemState, BaseItem;
 	local XComGameState NewGameState;
 	local array<name> UtilityItemTypes;
 	local name ItemTemplateName;
+	local StateObjectReference ItemReference, BlankReference;
 	local array<XComGameState_Item> UtilityItems, GrenadeItems, MergableItems;
+	local X2EquipmentTemplate EquipmentTemplate;
 	local int BaseAmmo; 
 	local object ThisObj;
 
@@ -403,6 +421,27 @@ simulated function ResetUnitState()
 			}
 		}
 	}
+
+	//
+	foreach Unit.InventoryItems(ItemReference)
+	{
+		ItemState = XComGameState_Item(`XCOMHISTORY.GetGameStateForObjectID(ItemReference.ObjectID));
+		if( ItemState.OwnerStateObject.ObjectID == Unit.ObjectID )
+		{
+			EquipmentTemplate = X2EquipmentTemplate(ItemState.GetMyTemplate());
+			if( EquipmentTemplate != none && EquipmentTemplate.CosmeticUnitTemplate != "" && ItemState.CosmeticUnitRef.ObjectID != 0)
+			{
+				`log("Murdering a gremlin",, 'Refill items');
+				CosmeticUnit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', ItemState.CosmeticUnitRef.ObjectID));
+				CosmeticUnit.RemoveUnitFromPlay();
+				NewGameState.AddStateObject(CosmeticUnit);
+				ItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', ItemReference.ObjectID));
+				ItemState.CosmeticUnitRef = BlankReference;
+				NewGameState.AddStateObject(ItemState);
+			}
+		}
+	}
+	
 	
 	Unit.ValidateLoadout(NewGameState);
 	
