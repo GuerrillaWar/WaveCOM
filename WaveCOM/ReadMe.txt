@@ -10,8 +10,5 @@ Keep in mind that this mod is bending XCOM in wierd and wonderful ways, so don't
 Known Issues 
 - Visualisation when loading out with new weapons often breaks animations. Its a hard problem, and I didn't want to delay to completely resolve it when I have no idea how long that will take, and the mod is plenty playable otherwise. 
 - Squaddies won't automatically equip their signature weapons, so after you promote a soldier, make sure to change its loadout appropriately. 
-- Don't expect save games to work 
-- Customize Menu Broken 
-- PCS Implants Menu Broken 
 - Cleaning up the game state doesn't work well yet, so likely will require restarting XCOM after losing the mission. 
 - Not particularly balanced as it will need plenty of playtesting, the mod has plenty of tuning available in XComWaveCOM.ini, so balance to taste.
