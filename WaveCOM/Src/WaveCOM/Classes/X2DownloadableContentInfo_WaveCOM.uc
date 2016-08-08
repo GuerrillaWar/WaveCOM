@@ -11,6 +11,7 @@
 class X2DownloadableContentInfo_WaveCOM extends X2DownloadableContentInfo config(WaveCOM);
 
 var const config float WaveCOMResearchSupplyCostRatio;
+var array<name> NonUpgradeSchematics;
 
 static event OnPostTemplatesCreated()
 {
@@ -97,10 +98,13 @@ static function UpdateSchematicTemplates ()
 	Schematics = Manager.GetAllSchematicTemplates();
 	foreach Schematics(Schematic)
 	{
-		`log("Updating: " @Schematic.DataName);
-		Schematic.OnBuiltFn = UpgradeItems;
+		if (default.NonUpgradeSchematics.Find(Schematic.DataName) == INDEX_NONE)
+		{
+			`log("Updating: " @Schematic.DataName);
+			Schematic.OnBuiltFn = UpgradeItems;
 
-		Manager.AddItemTemplate(Schematic, true);
+			Manager.AddItemTemplate(Schematic, true);
+		}
 	}
 }
 
@@ -118,7 +122,6 @@ static function UpgradeItems(XComGameState NewGameState, XComGameState_Item Item
 	local array<XComGameState_Unit> Soldiers;
 	local EInventorySlot InventorySlot;
 	local XGItem ItemVisualizer;
-	local XComGameState_Unit HighestRankSoldier;
 	local int idx, iSoldier, iItems;
 	local name CreatorTemplateName;
 	local XGUnit Visualizer;
