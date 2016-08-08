@@ -69,6 +69,8 @@ event OnInit(UIScreen Screen)
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'WaveCOM_WaveStart', OnWaveStart, ELD_Immediate);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'WaveCOM_WaveEnd', OnWaveEnd, ELD_Immediate);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'UnitDied', OnDeath, ELD_OnStateSubmitted);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'ResearchCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'ItemConstructionCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
 }
 
 private function UpdateDeployCost ()
@@ -120,6 +122,12 @@ private function EventListenerReturn OnWaveEnd(Object EventData, Object EventSou
 {
 	UpdateResources();
 	ActionsPanel.Show();
+	return ELR_NoInterrupt;
+}
+
+private function EventListenerReturn UpdateResourceHUD(Object EventData, Object EventSource, XComGameState NewGameState, Name InEventID)
+{
+	UpdateResources();
 	return ELR_NoInterrupt;
 }
 
@@ -180,7 +188,6 @@ public function OpenDeployMenu(UIButton Button)
 	local XComGameState_Unit StrategyUnit;
 	local XComGameState_HeadquartersXCom XComHQ;
 	local ArtifactCost Resources;
-	local int LastStrategyStateIndex;
 	local StrategyCost DeployCost;
 	local array<StrategyCostScalar> EmptyScalars;
 	local XComGameState NewGameState;
@@ -213,20 +220,33 @@ public function OpenDeployMenu(UIButton Button)
 	// and add it to the board
 	if (StrategyUnit != none)
 	{
-		AddStrategyUnitToBoard(StrategyUnit, History);
+		StrategyUnit = AddStrategyUnitToBoard(StrategyUnit, History);
 
-		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Pay for Soldier");
-		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
+		if (StrategyUnit != none)
+		{
+			NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Pay for Soldier");
+			XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
 
-		Resources.ItemTemplateName = 'Supplies';
-		Resources.Quantity = CurrentDeployCost;
-		DeployCost.ResourceCosts.AddItem(Resources);
-		XComHQ.PayStrategyCost(NewGameState, DeployCost, EmptyScalars);
-		XComHQ.Squad.AddItem(StrategyUnit.GetReference());
-		NewGameState.AddStateObject(XComHQ);
-		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
-		UpdateDeployCost();
-		UpdateResources();
+			Resources.ItemTemplateName = 'Supplies';
+			Resources.Quantity = CurrentDeployCost;
+			DeployCost.ResourceCosts.AddItem(Resources);
+			XComHQ.PayStrategyCost(NewGameState, DeployCost, EmptyScalars);
+			XComHQ.Squad.AddItem(StrategyUnit.GetReference());
+			NewGameState.AddStateObject(XComHQ);
+			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+			UpdateDeployCost();
+			UpdateResources();
+		}
+		else
+		{
+			kDialogData.eType = eDialog_Alert;
+			kDialogData.strTitle = "Failed to spawn unit";
+			kDialogData.strText = "Unable to spawn the requested unit, there might be no room on the spawn zone.";
+
+			kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+
+			`PRES.UIRaiseDialog(kDialogData);
+		}
 	}
 	else
 	{
@@ -314,7 +334,7 @@ private static function bool ChooseSpawnLocation(out Vector SpawnLocation)
 }
 
 // Places the given strategy unit on the game board
-private static function XComGameState_Unit AddStrategyUnitToBoard(XComGameState_Unit Unit, XComGameStateHistory History)
+static function XComGameState_Unit AddStrategyUnitToBoard(XComGameState_Unit Unit, XComGameStateHistory History)
 {
 	local X2TacticalGameRuleset Rules;
 	local Vector SpawnLocation;

@@ -118,10 +118,10 @@ static function UpgradeItems(XComGameState NewGameState, XComGameState_Item Item
 	local array<XComGameState_Unit> Soldiers;
 	local EInventorySlot InventorySlot;
 	local XGItem ItemVisualizer;
-	local XComNarrativeMoment EquipNarrativeMoment;
 	local XComGameState_Unit HighestRankSoldier;
 	local int idx, iSoldier, iItems;
 	local name CreatorTemplateName;
+	local XGUnit Visualizer;
 
 	CreatorTemplateName = ItemState.GetMyTemplateName();
 
@@ -248,26 +248,17 @@ static function UpgradeItems(XComGameState NewGameState, XComGameState_Item Item
 						// Then add the new item to the soldier in the same slot
 						Soldiers[iSoldier].AddItemToInventory(UpgradedItemState, InventorySlot, NewGameState);
 
-						// Store the highest ranking soldier to get the upgraded item
-						if (HighestRankSoldier == none || Soldiers[iSoldier].GetRank() > HighestRankSoldier.GetRank())
-						{
-							HighestRankSoldier = Soldiers[iSoldier];
-						}
+						Visualizer = XGUnit(Soldiers[iSoldier].FindOrCreateVisualizer());
+						Soldiers[iSoldier].SyncVisualizer(NewGameState);
+						Visualizer.ApplyLoadoutFromGameState(Soldiers[iSoldier], NewGameState);
+
+						class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnitState(Soldiers[iSoldier].ObjectID, NewGameState);
 					}
 				}
 			}
 		}
 
-		// Play a narrative if there is one and there is a valid soldier
-		if (HighestRankSoldier != none && X2EquipmentTemplate(UpgradeItemTemplate).EquipNarrative != "")
-		{
-			EquipNarrativeMoment = XComNarrativeMoment(`CONTENT.RequestGameArchetype(X2EquipmentTemplate(UpgradeItemTemplate).EquipNarrative));
-			if (EquipNarrativeMoment != None && XComHQ.CanPlayArmorIntroNarrativeMoment(EquipNarrativeMoment))
-			{
-				XComHQ.UpdatePlayedArmorIntroNarrativeMoments(EquipNarrativeMoment);
-				`HQPRES.UIArmorIntroCinematic(EquipNarrativeMoment.nmRemoteEvent, 'CIN_ArmorIntro_Done', HighestRankSoldier.GetReference());
-			}
-		}
+		// Remove narratives to prevent problems
 	}
 }
 

@@ -100,8 +100,8 @@ static function MergeAmmoAsNeeded(XComGameState StartState, XComGameState_Unit U
 
 static function UpdateUnit(int UnitID)
 {
-	local XComGameState_Unit Unit, CosmeticUnit;
 	local XComGameState NewGameState;
+	local XComGameState_Unit Unit, CosmeticUnit;
 	local Vector SpawnLocation;
 	local XGUnit Visualizer;
 	local StateObjectReference ItemReference, CosmeticUnitRef;
@@ -112,6 +112,7 @@ static function UpdateUnit(int UnitID)
 	local XComAISpawnManager SpawnManager;
 
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh Inventory");
+
 	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitID));
 
 	`log("Cleaning Abilities");
@@ -128,8 +129,6 @@ static function UpdateUnit(int UnitID)
 		`log("Adding " @ItemState.GetMyTemplateName());
 		NewGameState.AddStateObject(ItemState);
 	}
-	
-
 
 	MergeAmmoAsNeeded(NewGameState, Unit);
 
@@ -186,9 +185,39 @@ static function UpdateUnit(int UnitID)
 	Unit.Shredded = 0;
 
 	NewGameState.AddStateObject(Unit);
-	XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = Unit.GetReference();
-	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	if (XComGameStateContext_TacticalGameRule(NewGameState.GetContext()) != none)
+		XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = Unit.GetReference();
 
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+}
+
+static function UpdateUnitState(int UnitID, XComGameState NewGameState)
+{
+	local XComGameState_Unit Unit;
+	local StateObjectReference AbilityReference;
+
+	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitID));
+
+	`log("Cleaning Abilities");
+	foreach Unit.Abilities(AbilityReference)
+	{
+		NewGameState.RemoveStateObject(AbilityReference.ObjectID);
+	}
+	Unit.Abilities.Length = 0;
+
+	CleanUpStats(NewGameState, Unit);
+
+	MergeAmmoAsNeeded(NewGameState, Unit);
+
+	`TACTICALRULES.InitializeUnitAbilities(NewGameState, Unit);
+	if (Unit.FindAbility('Phantom').ObjectID > 0)
+	{
+		Unit.EnterConcealmentNewGameState(NewGameState);
+	}
+
+	NewGameState.AddStateObject(Unit);
+	if (XComGameStateContext_TacticalGameRule(NewGameState.GetContext()) != none)
+		XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = Unit.GetReference();
 }
 
 simulated function OnCancel()
@@ -238,6 +267,9 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 	local UIArmory_Promotion PromotionUI;
 	local XComGameState_Unit UnitState;
 	local XComGameState_HeadquartersXCom XComHQ;
+	local XComGameState_Item InventoryItem;
+	local array<XComGameState_Item> InventoryItems;
+	local XGItem ItemVisualizer;
 
 	local XComGameState NewGameState;
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("RankUp");
@@ -247,7 +279,21 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 	{
 		XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom', true));
 		CleanUpStats(NewGameState, UnitState);
-		UnitState.RankUpSoldier(NewGameState, XComHQ.SelectNextSoldierClass());
+		UnitState.RankUpSoldier(NewGameState, XComHQ.SelectNextSoldierClass());	
+		if (UnitState.GetRank() == 1)
+		{
+			InventoryItems = UnitState.GetAllInventoryItems(NewGameState);
+			foreach InventoryItems(InventoryItem)
+			{
+				UnitState.RemoveItemFromInventory(InventoryItem, NewGameState);
+				ItemVisualizer = XGItem(`XCOMHISTORY.GetVisualizer(InventoryItem.GetReference().ObjectID));
+				ItemVisualizer.Destroy();
+				`XCOMHISTORY.SetVisualizer(InventoryItem.GetReference().ObjectID, none);
+			}
+			UnitState.ApplySquaddieLoadout(NewGameState, XComHQ);
+			UnitState.ApplyBestGearLoadout(NewGameState); // Make sure the squaddie has the best gear available
+			UpdateUnitState(UnitState.ObjectID, NewGameState);
+		}
 		UnitState.ValidateLoadout(NewGameState);
 	}
 	NewGameState.AddStateObject(UnitState);
@@ -444,6 +490,7 @@ simulated function ResetUnitState()
 	
 	
 	Unit.ValidateLoadout(NewGameState);
+	Unit.SetUnitFloatValue('FreeReload', 0, eCleanup_BeginTactical);
 	
 	ThisObj = self;
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'HACK_OnGameStateSubmittedFieldLoadout', OnGameStateSubmitted, ELD_OnStateSubmitted);

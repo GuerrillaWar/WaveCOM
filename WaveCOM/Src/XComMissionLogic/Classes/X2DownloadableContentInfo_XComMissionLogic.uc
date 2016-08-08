@@ -33,9 +33,18 @@ static event OnLoadedSavedGame()
 static event InstallNewCampaign(XComGameState StartState)
 {
 	local XComMissionLogic_Listener MissionListener;
+	local XComGameState_CampaignSettings CampaignSettings;
 	MissionListener = XComMissionLogic_Listener(StartState.CreateStateObject(class'XComMissionLogic_Listener'));
 	MissionListener.RegisterToListen();
 	StartState.AddStateObject(MissionListener);
 
 	`log("XComMissionLogic :: InstallNewCampaign");
+
+
+	// Removing all nerative content, so techs can be accessed from the mission
+	foreach StartState.IterateByClassType(class'XComGameState_CampaignSettings', CampaignSettings)
+	{
+		break;
+	}
+	CampaignSettings.RemoveAllOptionalNarrativeDLC();
 }
