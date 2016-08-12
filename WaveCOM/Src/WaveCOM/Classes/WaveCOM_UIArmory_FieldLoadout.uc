@@ -292,7 +292,6 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 			}
 			UnitState.ApplySquaddieLoadout(NewGameState, XComHQ);
 			UnitState.ApplyBestGearLoadout(NewGameState); // Make sure the squaddie has the best gear available
-			UpdateUnitState(UnitState.ObjectID, NewGameState);
 		}
 		UnitState.ValidateLoadout(NewGameState);
 	}
