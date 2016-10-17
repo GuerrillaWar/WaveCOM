@@ -50,5 +50,6 @@ function EventListenerReturn LoadRelevantMissionLogic(Object EventData, Object E
 		}
 	}
 	`log("XComMissionLogic :: Loaded Mission Logic");
+
 	return ELR_NoInterrupt;
 }
