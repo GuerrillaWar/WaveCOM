@@ -5,14 +5,59 @@ var XComGameState_MissionSite WaveCOMMissionSite;
 
 var const config int WaveCOMStartingSupplies;
 
+function LoadGame()
+{
+	`STRATEGYRULES.StartNewGame();
+	GoToState('WaveCOMLoadingGame');
+}
+
+function TransferFromTactical()
+{
+	`STRATEGYRULES.StartNewGame();
+	GoToState('WaveCOMStartingFromTactical');
+}
+
+state WaveCOMStartingFromTactical
+{
+Begin:		
+	`HQPRES.UIEnterStrategyMap();
+		
+	// Movie will have already played so jump to player stats screen
+	`HQPRES.UIYouWin();
+}
+
+state WaveCOMLoadingGame
+{
+Begin:
+	PrepareTacticalBattle(WaveCOMMissionSite.ObjectID);
+	LaunchTacticalBattle(WaveCOMMissionSite.ObjectID);
+}
+
 state Initing
 {
 Begin:
 	
 	while( `HQPRES.IsBusy() )
 		Sleep( 0 );
-	
-	StartWaveCOM();
+	if( `XCOMHISTORY.GetNumGameStates() == 1 )
+	{	
+		// New Game
+		StartWaveCOM();
+	}
+	else
+	{
+		// Loaded game, since there are no strategy save the code shouldn't reach here, but if it did, we need to handle things
+		if(m_bLoadedFromSave)
+		{
+			// Somehow we loaded to strategy side. Give us a new WaveCOM mission
+			LoadGame();
+		}
+		else
+		{
+			// We probably evac'd. End the Game.
+			TransferFromTactical();
+		}
+	}
 }
 
 function StartWaveCOM()

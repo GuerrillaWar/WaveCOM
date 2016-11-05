@@ -11,7 +11,7 @@
 class X2DownloadableContentInfo_WaveCOM extends X2DownloadableContentInfo config(WaveCOM);
 
 var const config float WaveCOMResearchSupplyCostRatio;
-var array<name> NonUpgradeSchematics;
+var config array<name> NonUpgradeSchematics;
 
 static event OnPostTemplatesCreated()
 {
@@ -100,10 +100,14 @@ static function UpdateSchematicTemplates ()
 	{
 		if (default.NonUpgradeSchematics.Find(Schematic.DataName) == INDEX_NONE)
 		{
-			`log("Updating: " @Schematic.DataName);
+			`log("Updating: " @Schematic.DataName,, 'WaveCOM');
 			Schematic.OnBuiltFn = UpgradeItems;
 
 			Manager.AddItemTemplate(Schematic, true);
+		}
+		else
+		{
+			`log("Skipping schematic: " @Schematic.DataName,, 'WaveCOM');
 		}
 	}
 }

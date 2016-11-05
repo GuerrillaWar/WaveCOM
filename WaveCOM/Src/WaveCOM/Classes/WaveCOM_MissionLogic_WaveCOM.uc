@@ -308,6 +308,24 @@ function CollectLootToHQ()
 				XComHQ.PutItemInInventory(NewGameState, ItemState, false);
 			}
 
+			// Recover all dead soldier's items.
+			if (UnitState.IsDead())
+			{
+				ItemStates = UnitState.GetAllInventoryItems(NewGameState, true);
+				foreach ItemStates(ItemState)
+				{
+					ItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', ItemState.ObjectID));
+					NewGameState.AddStateObject(ItemState);
+
+					if (UnitState.RemoveItemFromInventory(ItemState, NewGameState)) //  possible we'll have some items that cannot be removed, so don't recover them
+					{
+						ItemState.OwnerStateObject = XComHQ.GetReference();
+						XComHQ.PutItemInInventory(NewGameState, ItemState, false);
+					}
+				}
+
+				UnitState.RemoveUnitFromPlay(); // RIP
+			}
 		}
 	}
 

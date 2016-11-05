@@ -319,6 +319,8 @@ static function CleanUpStats(XComGameState NewGameState, XComGameState_Unit Unit
 		}
 		EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
 	}
+
+	UnitState.bUnconscious = false; // Wake up when unconcious state is removed
 }
 
 simulated function InitArmory(StateObjectReference UnitRef, optional name DispEvent, optional name SoldSpawnEvent, optional name NavBackEvent, optional name HideEvent, optional name RemoveEvent, optional bool bInstant = false, optional XComGameState InitCheckGameState)
@@ -489,7 +491,9 @@ simulated function ResetUnitState()
 	
 	
 	Unit.ValidateLoadout(NewGameState);
-	Unit.SetUnitFloatValue('FreeReload', 0, eCleanup_BeginTactical);
+
+	// Every new wave should act as if it's a new mission
+	Unit.CleanupUnitValues(eCleanup_BeginTactical);
 	
 	ThisObj = self;
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'HACK_OnGameStateSubmittedFieldLoadout', OnGameStateSubmitted, ELD_OnStateSubmitted);
