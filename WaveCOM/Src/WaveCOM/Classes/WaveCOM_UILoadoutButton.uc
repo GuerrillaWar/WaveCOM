@@ -14,6 +14,7 @@ var int CurrentDeployCost;
 event OnInit(UIScreen Screen)
 {
 	local Object ThisObj;
+	local WaveCOM_MissionLogic_WaveCOM WaveLogic;
 
 	CurrentDeployCost = 50;
 
@@ -65,12 +66,42 @@ event OnInit(UIScreen Screen)
 	UpdateDeployCost();
 	UpdateResources();
 
+	WaveLogic = WaveCOM_MissionLogic_WaveCOM(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'WaveCOM_MissionLogic_WaveCOM'));
+	if (WaveLogic != none && WaveLogic.WaveStatus != eWaveStatus_Preparation)
+	{
+		// When we load the game, check if we are still in combat phase, if so, don't show the panel.
+		AvengerHUD.HideResources();
+		ActionsPanel.Hide();
+	}
+
 	ThisObj = self;
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'WaveCOM_WaveStart', OnWaveStart, ELD_Immediate);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'WaveCOM_WaveEnd', OnWaveEnd, ELD_Immediate);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'UnitDied', OnDeath, ELD_OnStateSubmitted);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'UpdateDeployCost', OnDeath, ELD_Immediate);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'ResearchCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'ItemConstructionCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
+}
+
+public function XComGameState_Unit GetNonDeployedSoldier()
+{
+	local XComGameState_HeadquartersXCom XComHQ;	
+	local StateObjectReference UnitRef;
+	local XComGameState_Unit UnitState;
+			
+	XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+	if (XComHQ != none)
+	{
+		foreach XComHQ.Squad(UnitRef)
+		{
+			UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitRef.ObjectID));
+			if (UnitState != none && UnitState.IsAlive() && UnitState.Abilities.Length == 0) // Uninitialized
+			{
+				return UnitState;
+			}
+		}
+	}
+	return none;
 }
 
 private function UpdateDeployCost ()
@@ -92,6 +123,7 @@ private function UpdateDeployCost ()
 	}
 	`log("Count: " @XComCount);
 
+	
 	if (XComCount > WaveCOMDeployCosts.Length - 1)
 	{
 		CurrentDeployCost = WaveCOMDeployCosts[WaveCOMDeployCosts.Length - 1];
@@ -101,7 +133,14 @@ private function UpdateDeployCost ()
 		CurrentDeployCost = WaveCOMDeployCosts[XComCount];
 	}
 
-	Button6.SetText("Deploy Soldier - " @CurrentDeployCost);
+	if (GetNonDeployedSoldier() != none)
+	{
+		Button6.SetText("Deploy pending soldier");
+	}
+	else
+	{
+		Button6.SetText("Deploy Soldier - " @CurrentDeployCost);
+	}
 
 }
 
@@ -198,7 +237,24 @@ public function OpenDeployMenu(UIButton Button)
 	// grab the archived strategy state from the history and the headquarters object
 	XComHQ = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
 		
-	if (XComHQ.GetSupplies() < CurrentDeployCost)
+	StrategyUnit = GetNonDeployedSoldier();
+	if (StrategyUnit != none)
+	{
+		StrategyUnit = AddStrategyUnitToBoard(StrategyUnit, History);
+		if (StrategyUnit == none)
+		{
+			kDialogData.eType = eDialog_Alert;
+			kDialogData.strTitle = "Failed to spawn unit";
+			kDialogData.strText = "Unable to spawn the requested unit, there might be no room on the spawn zone.";
+
+			kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+
+			`PRES.UIRaiseDialog(kDialogData);
+		}
+		UpdateDeployCost();
+		return;
+	}
+	else if (XComHQ.GetSupplies() < CurrentDeployCost)
 	{
 		UpdateDeployCost();
 		UpdateResources();
@@ -216,6 +272,19 @@ public function OpenDeployMenu(UIButton Button)
 
 	// try to get a unit from the strategy game
 	StrategyUnit = ChooseStrategyUnit(History);
+
+	// Avenger runs out of unit???
+	if (StrategyUnit == none)
+	{
+		// Create New Rookie
+		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Generate new soldier");
+		StrategyUnit = `CHARACTERPOOLMGR.CreateCharacter(NewGameState, `XPROFILESETTINGS.Data.m_eCharPoolUsage);
+		NewGameState.AddStateObject(StrategyUnit);
+		StrategyUnit.ApplyBestGearLoadout(NewGameState);
+
+		XComHQ.AddToCrew(NewGameState, StrategyUnit);
+		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	}
 
 	// and add it to the board
 	if (StrategyUnit != none)
@@ -252,7 +321,7 @@ public function OpenDeployMenu(UIButton Button)
 	{
 		kDialogData.eType = eDialog_Alert;
 		kDialogData.strTitle = "No more reserves";
-		kDialogData.strText = "No more reserves in avenger.\nTODO: Refill avenger reserves";
+		kDialogData.strText = "No more reserves in avenger.\nTODO: Refill avenger reserves (Crew count:" @ XComHQ.Crew.Length @ ", Squad count:" @ XComHQ.Squad.Length @ ")";
 
 		kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
 
@@ -283,7 +352,10 @@ private static function XComGameState_Unit ChooseStrategyUnit(XComGameStateHisto
 		StrategyUnit = XComGameState_Unit(History.GetGameStateForObjectID(HQCrew.ObjectID));
 
 		if (StrategyUnit == none)
+		{	
+			`log("UnitState not found in avenger",, 'WaveCOM');
 			continue;
+		}
 		// only living soldier units please
 		if (StrategyUnit.IsDead() || !StrategyUnit.IsSoldier() || StrategyUnit.IsTraining() || StrategyUnit.Abilities.Length > 0)
 		{
@@ -293,6 +365,7 @@ private static function XComGameState_Unit ChooseStrategyUnit(XComGameStateHisto
 		// only if not already on the board
 		if(XComHQ.Squad.Find('ObjectID', StrategyUnit.ObjectID) != INDEX_NONE)
 		{
+			`log("UnitState already part of squad",, 'WaveCOM');
 			continue;
 		}
 

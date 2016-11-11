@@ -30,7 +30,7 @@ simulated function OnAccept()
 			Push_UIArmory_Implants(UnitReference);
 		break;
 	case 3: // WEAPON UPGRADE
-		// Release pawn so it can get recreated when the screen receives focus
+		// Release pawn so it can get recreated whenI the screen receives focus
 		ReleasePawn();
 		if( XComHQ.bModularWeapons )
 			Push_UIArmory_WeaponUpgrade(UnitReference);
@@ -52,15 +52,46 @@ function UpdateActiveUnit()
 	UpdateUnit(UnitReference.ObjectID);
 }
 
+static function int GetBonusWeaponAmmoFromAbilities(XComGameState_Item ItemState, XComGameState StartState, XComGameState_Unit UnitState)
+{
+	local array<SoldierClassAbilityType> SoldierAbilities;
+	local X2AbilityTemplateManager AbilityTemplateManager;
+	local X2AbilityTemplate AbilityTemplate;
+	local X2CharacterTemplate CharacterTemplate;
+	local int Bonus, Idx;
+
+	//  Note: This function is called prior to abilities being generated for the unit, so we only inspect
+	//          1) the earned soldier abilities
+	//          2) the abilities on the character template
+
+	Bonus = 0;
+	AbilityTemplateManager = class'X2AbilityTemplateManager'.static.GetAbilityTemplateManager();
+	SoldierAbilities = UnitState.GetEarnedSoldierAbilities();
+
+	for (Idx = 0; Idx < SoldierAbilities.Length; ++Idx)
+	{
+		AbilityTemplate = AbilityTemplateManager.FindAbilityTemplate(SoldierAbilities[Idx].AbilityName);
+		if (AbilityTemplate != none && AbilityTemplate.GetBonusWeaponAmmoFn != none)
+			Bonus += AbilityTemplate.GetBonusWeaponAmmoFn(UnitState, ItemState);
+	}
+
+	CharacterTemplate = UnitState.GetMyTemplate();
+	
+	for (Idx = 0; Idx < CharacterTemplate.Abilities.Length; ++Idx)
+	{
+		AbilityTemplate = AbilityTemplateManager.FindAbilityTemplate(CharacterTemplate.Abilities[Idx]);
+		if (AbilityTemplate != none && AbilityTemplate.GetBonusWeaponAmmoFn != none)
+			Bonus += AbilityTemplate.GetBonusWeaponAmmoFn(UnitState, ItemState);
+	}
+
+	return Bonus;
+}
+
 static function MergeAmmoAsNeeded(XComGameState StartState, XComGameState_Unit Unit)
 {
 	local XComGameState_Item ItemIter, ItemInnerIter;
 	local X2WeaponTemplate MergeTemplate;
 	local int Idx, InnerIdx, BonusAmmo;
-	local bool bFieldMedic, bHeavyOrdnance;
-
-	bFieldMedic = Unit.HasSoldierAbility('FieldMedic');
-	bHeavyOrdnance = Unit.HasSoldierAbility('HeavyOrdnance');
 
 	for (Idx = 0; Idx < Unit.InventoryItems.Length; ++Idx)
 	{
@@ -70,12 +101,7 @@ static function MergeAmmoAsNeeded(XComGameState StartState, XComGameState_Unit U
 			MergeTemplate = X2WeaponTemplate(ItemIter.GetMyTemplate());
 			if (MergeTemplate != none && MergeTemplate.bMergeAmmo)
 			{
-				BonusAmmo = 0;
-
-				if (bFieldMedic && ItemIter.GetWeaponCategory() == class'X2Item_DefaultUtilityItems'.default.MedikitCat)
-					BonusAmmo += class'X2Ability_SpecialistAbilitySet'.default.FIELD_MEDIC_BONUS;
-				if (bHeavyOrdnance && ItemIter.InventorySlot == eInvSlot_GrenadePocket)
-					BonusAmmo += class'X2Ability_GrenadierAbilitySet'.default.ORDNANCE_BONUS;
+				BonusAmmo = GetBonusWeaponAmmoFromAbilities(ItemIter, StartState, Unit);
 
 				ItemIter.MergedItemCount = 1;
 				for (InnerIdx = Idx + 1; InnerIdx < Unit.InventoryItems.Length; ++InnerIdx)
@@ -83,10 +109,7 @@ static function MergeAmmoAsNeeded(XComGameState StartState, XComGameState_Unit U
 					ItemInnerIter = XComGameState_Item(StartState.GetGameStateForObjectID(Unit.InventoryItems[InnerIdx].ObjectID));
 					if (ItemInnerIter != none && ItemInnerIter.GetMyTemplate() == MergeTemplate)
 					{
-						if (bFieldMedic && ItemInnerIter.GetWeaponCategory() == class'X2Item_DefaultUtilityItems'.default.MedikitCat)
-							BonusAmmo += class'X2Ability_SpecialistAbilitySet'.default.FIELD_MEDIC_BONUS;
-						if (bHeavyOrdnance && ItemInnerIter.InventorySlot == eInvSlot_GrenadePocket)
-							BonusAmmo += class'X2Ability_GrenadierAbilitySet'.default.ORDNANCE_BONUS;
+						BonusAmmo += GetBonusWeaponAmmoFromAbilities(ItemInnerIter, StartState, Unit);
 						ItemInnerIter.bMergedOut = true;
 						ItemInnerIter.Ammo = 0;
 						ItemIter.MergedItemCount++;
@@ -252,8 +275,8 @@ function Push_UIArmory_Implants(StateObjectReference UnitRef)
 
 function Push_UIArmory_WeaponUpgrade(StateObjectReference UnitOrWeaponRef)
 {
-	if(TacHUDScreen.Movie.Stack.IsNotInStack(class'UIArmory_WeaponUpgrade'))
-		UIArmory_WeaponUpgrade(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'UIArmory_WeaponUpgrade', TacHUDScreen))).InitArmory(UnitOrWeaponRef);
+	if(TacHUDScreen.Movie.Stack.IsNotInStack(class'WaveCOM_UIArmory_WeaponUpgrade'))
+		UIArmory_WeaponUpgrade(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'WaveCOM_UIArmory_WeaponUpgrade', TacHUDScreen))).InitArmory(UnitOrWeaponRef);
 }
 
 function Push_UIArmory_Loadout(StateObjectReference UnitRef)
@@ -301,7 +324,7 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 	if (UnitState.GetSoldierClassTemplateName() == 'PsiOperative')
 		PromotionUI = UIArmory_PromotionPsiOp(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'UIArmory_PromotionPsiOp', TacHUDScreen)));
 	else
-		PromotionUI = UIArmory_Promotion(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'UIArmory_Promotion', TacHUDScreen)));
+		PromotionUI = WaveCOM_UIArmory_Promotion(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'WaveCOM_UIArmory_Promotion', TacHUDScreen)));
 	
 	PromotionUI.InitPromotion(UnitRef, bInstantTransition);
 }
@@ -326,8 +349,16 @@ static function CleanUpStats(XComGameState NewGameState, XComGameState_Unit Unit
 simulated function InitArmory(StateObjectReference UnitRef, optional name DispEvent, optional name SoldSpawnEvent, optional name NavBackEvent, optional name HideEvent, optional name RemoveEvent, optional bool bInstant = false, optional XComGameState InitCheckGameState)
 {
 	UnitReference = UnitRef;
-	ResetUnitState();
-	super.InitArmory(UnitRef, DispEvent, SoldSpawnEvent, NavBackEvent, HideEvent, RemoveEvent, bInstant, InitCheckGameState);
+	ResetUnitState();	
+	bUseNavHelp = class'XComGameState_HeadquartersXCom'.static.IsObjectiveCompleted('T0_M2_WelcomeToArmory');
+	super(UIArmory).InitArmory(UnitRef, DispEvent, SoldSpawnEvent, NavBackEvent, HideEvent, RemoveEvent, bInstant, InitCheckGameState);
+
+	List = Spawn(class'UIList', self).InitList('armoryMenuList');
+	List.OnItemClicked = OnItemClicked;
+	List.OnSelectionChanged = OnSelectionChanged;
+
+	PopulateData();
+	CheckForCustomizationPopup();
 }
 
 simulated function ResetUnitState()
@@ -356,6 +387,12 @@ simulated function ResetUnitState()
 	`log("=====Initializing refillable items=====",, 'Refill items');
 
 	// Combine utility slots and grenade slots
+	foreach GrenadeItems(ItemState)
+	{
+		UtilityItems.AddItem(ItemState);
+	}
+	// For hunter's axe
+	GrenadeItems = Unit.GetAllItemsInSlot(eInvSlot_TertiaryWeapon);
 	foreach GrenadeItems(ItemState)
 	{
 		UtilityItems.AddItem(ItemState);

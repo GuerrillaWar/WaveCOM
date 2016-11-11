@@ -9,6 +9,7 @@ simulated function InitScreen(XComPlayerController InitController, UIMovie InitM
 	Links.Hide();
 	Objectives.Hide();
 	Shortcuts.Hide();
+	Shortcuts.DoHide();
 	ToDoWidget.Hide();
 	UpdateDefaultResources(); 
 	ShowResources();

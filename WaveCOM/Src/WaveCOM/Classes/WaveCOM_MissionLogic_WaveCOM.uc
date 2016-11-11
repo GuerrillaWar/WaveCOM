@@ -237,7 +237,7 @@ function CollectLootToHQ()
 	local int LootIndex, SupplyReward, KillCount;
 	local X2ItemTemplateManager ItemTemplateManager;
 	local XComGameState_Item ItemState;
-	local StateObjectReference AbilityReference;
+	local StateObjectReference AbilityReference, UnitRef;
 	local array<XComGameState_Item> ItemStates;
 	local X2ItemTemplate ItemTemplate;
 	local XComGameState_Unit UnitState;
@@ -323,7 +323,8 @@ function CollectLootToHQ()
 						XComHQ.PutItemInInventory(NewGameState, ItemState, false);
 					}
 				}
-
+				
+				XComHQ.Squad.RemoveItem(UnitState.GetReference()); // Remove from squad
 				UnitState.RemoveUnitFromPlay(); // RIP
 			}
 		}
@@ -389,7 +390,11 @@ function CollectLootToHQ()
 
 			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 			
-			class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnit(UnitState.GetReference().ObjectID);
+			UnitRef = UnitState.GetReference();
+			if (UnitState.IsAlive() && XComHQ.Squad.Find('ObjectID', UnitRef.ObjectID) != INDEX_NONE)
+			{
+				class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnit(UnitRef.ObjectID);
+			}
 		}
 	}
 }

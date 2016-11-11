@@ -32,19 +32,6 @@ static function X2DataTemplate CreateWaveCOMTemplate()
 
 function AvengerDefenseOnSuccess(XComGameState NewGameState, XComGameState_MissionSite MissionState)
 {
-	local XComGameState_UFO UFOState;
-	local XComGameState_MissionSiteAvengerDefense AvengerDefense;
-
-	AvengerDefense = XComGameState_MissionSiteAvengerDefense(MissionState);
-	if (AvengerDefense != none)
-	{
-		UFOState = XComGameState_UFO(`XCOMHISTORY.GetGameStateForObjectID(AvengerDefense.AttackingUFO.ObjectID));
-		UFOState.RemoveEntity(NewGameState);
-	}
-
-	GiveRewards(NewGameState, MissionState);
-	MissionState.RemoveEntity(NewGameState);
-	class'XComGameState_HeadquartersResistance'.static.RecordResistanceActivity(NewGameState, 'ResAct_AvengerDefenseCompleted');
 }
 function AvengerDefenseOnFailure(XComGameState NewGameState, XComGameState_MissionSite MissionState)
 {

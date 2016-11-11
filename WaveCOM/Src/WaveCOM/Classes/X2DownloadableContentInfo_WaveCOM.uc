@@ -129,6 +129,7 @@ static function UpgradeItems(XComGameState NewGameState, XComGameState_Item Item
 	local int idx, iSoldier, iItems;
 	local name CreatorTemplateName;
 	local XGUnit Visualizer;
+	local StateObjectReference UnitRef;
 
 	CreatorTemplateName = ItemState.GetMyTemplateName();
 
@@ -241,8 +242,11 @@ static function UpgradeItems(XComGameState NewGameState, XComGameState_Item Item
 						// Remove the old item from the soldier and transfer over all weapon upgrades to the new item
 						Soldiers[iSoldier].RemoveItemFromInventory(InventoryItemState, NewGameState);
 						ItemVisualizer = XGItem(`XCOMHISTORY.GetVisualizer(InventoryItemState.GetReference().ObjectID));
-						ItemVisualizer.Destroy();
-						`XCOMHISTORY.SetVisualizer(InventoryItemState.GetReference().ObjectID, none);
+						if (ItemVisualizer != none)
+						{
+							ItemVisualizer.Destroy();
+							`XCOMHISTORY.SetVisualizer(InventoryItemState.GetReference().ObjectID, none);
+						}
 						WeaponUpgrades = InventoryItemState.GetMyWeaponUpgradeTemplates();
 						foreach WeaponUpgrades(WeaponUpgradeTemplate)
 						{
@@ -254,12 +258,14 @@ static function UpgradeItems(XComGameState NewGameState, XComGameState_Item Item
 
 						// Then add the new item to the soldier in the same slot
 						Soldiers[iSoldier].AddItemToInventory(UpgradedItemState, InventorySlot, NewGameState);
-
-						Visualizer = XGUnit(Soldiers[iSoldier].FindOrCreateVisualizer());
-						Soldiers[iSoldier].SyncVisualizer(NewGameState);
-						Visualizer.ApplyLoadoutFromGameState(Soldiers[iSoldier], NewGameState);
-
-						class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnitState(Soldiers[iSoldier].ObjectID, NewGameState);
+						UnitRef = Soldiers[iSoldier].GetReference();
+						if (Soldiers[iSoldier].IsAlive() && XComHQ.Squad.Find('ObjectID', UnitRef.ObjectID) != INDEX_NONE)
+						{
+							Visualizer = XGUnit(Soldiers[iSoldier].FindOrCreateVisualizer());
+							Soldiers[iSoldier].SyncVisualizer(NewGameState);
+							Visualizer.ApplyLoadoutFromGameState(Soldiers[iSoldier], NewGameState);
+							class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnitState(Soldiers[iSoldier].ObjectID, NewGameState);
+						}
 					}
 				}
 			}
