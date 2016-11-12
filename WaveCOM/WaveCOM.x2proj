@@ -52,6 +52,9 @@ Known Issues
     <Content Include="Config\XComContent.ini">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Config\XComGameCore.ini">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Config\XComMissionLogic.ini">
       <SubType>Content</SubType>
     </Content>
@@ -71,6 +74,9 @@ Known Issues
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOMStrategy.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOMXComGameState_BlackMarket.uc">
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_MissionLogic_WaveCOM.uc">
@@ -94,6 +100,9 @@ Known Issues
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UIAvengerHUD.uc">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UIBlackMarket.uc">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UICustomize_Menu.uc">
       <SubType>Content</SubType>
     </Content>
@@ -107,6 +116,9 @@ Known Issues
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UILoadoutButton.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UIOfficerTrainingSchool.uc">
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UISL_ListenForUnitReward.uc">

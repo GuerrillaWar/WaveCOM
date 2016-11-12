@@ -33,6 +33,7 @@ function EventListenerReturn ResearchComplete(Object EventData, Object EventSour
 			{
 				XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
 				XComHQ.Squad.AddItem(StrategyUnit.GetReference());
+				XComHQ.AddToCrew(NewGameState, StrategyUnit);
 				NewGameState.AddStateObject(XComHQ);
 				`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 			}

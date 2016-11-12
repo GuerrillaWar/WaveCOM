@@ -308,6 +308,7 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 			InventoryItems = UnitState.GetAllInventoryItems(NewGameState);
 			foreach InventoryItems(InventoryItem)
 			{
+				XComHQ.PutItemInInventory(NewGameState, InventoryItem);
 				UnitState.RemoveItemFromInventory(InventoryItem, NewGameState);
 				ItemVisualizer = XGItem(`XCOMHISTORY.GetVisualizer(InventoryItem.GetReference().ObjectID));
 				ItemVisualizer.Destroy();

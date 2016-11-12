@@ -12,12 +12,57 @@ class X2DownloadableContentInfo_WaveCOM extends X2DownloadableContentInfo config
 
 var const config float WaveCOMResearchSupplyCostRatio;
 var config array<name> NonUpgradeSchematics;
+var config array<name> ObsoleteOTSUpgrades;
+var config array<name> CantSellResource;
 
 static event OnPostTemplatesCreated()
 {
 	`log("WaveCOM :: Present And Correct");
+	PatchOutUselessOTS();
+	MakeEleriumAlloyUnsellable();
 }
 
+static function MakeEleriumAlloyUnsellable()
+{
+	local X2ItemTemplate ItemTemplate;
+	local X2DataTemplate Template;
+	local array<X2DataTemplate> ItemTemplates;
+	local name ResName;
+	
+	foreach default.CantSellResource(ResName)
+	{
+		class'X2ItemTemplateManager'.static.GetItemTemplateManager().FindDataTemplateAllDifficulties(ResName, ItemTemplates);
+		foreach ItemTemplates(Template)
+		{
+			ItemTemplate = X2ItemTemplate(Template);
+			if (ItemTemplate != none)
+			{
+				ItemTemplate.TradingPostValue = 0;
+			}
+		}
+	}
+}
+
+static function PatchOutUselessOTS()
+{
+	local X2FacilityTemplate FacilityTemplate;
+	local X2DataTemplate Template;
+	local array<X2DataTemplate> FacilityTemplates;
+	local name OTSName;
+
+	class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager().FindDataTemplateAllDifficulties('OfficerTrainingSchool', FacilityTemplates);
+	foreach FacilityTemplates(Template)
+	{
+		FacilityTemplate = X2FacilityTemplate(Template);
+		if (FacilityTemplate != none)
+		{
+			foreach default.ObsoleteOTSUpgrades(OTSName)
+			{
+				FacilityTemplate.SoldierUnlockTemplates.RemoveItem(OTSName);
+			}
+		}
+	}
+}
 
 /// <summary>
 /// Called when the player starts a new campaign while this DLC / Mod is installed
@@ -64,6 +109,26 @@ static function MakeAllTechInstant(XComGameState StartState)
 	}
 }
 
+static function AddSupplyCost(out array<ArtifactCost> Resources, int SupplyDiff)
+{
+	local ArtifactCost Resource, NewResource;
+
+	NewResource.ItemTemplateName = 'Supplies';
+
+	foreach Resources(Resource)
+	{
+		if (Resource.ItemTemplateName == 'Supplies')
+		{
+			NewResource.Quantity = Resource.Quantity;
+			Resources.RemoveItem(Resource);
+			break;
+		}
+	}
+
+	NewResource.Quantity += SupplyDiff;
+	Resources.AddItem(NewResource);
+}
+
 static function UpdateResearchTemplates ()
 {
 	local X2StrategyElementTemplateManager Manager;
@@ -71,7 +136,6 @@ static function UpdateResearchTemplates ()
 	local X2StrategyElementTemplate TechTemplate;
 	local X2TechTemplate Tech;
 	local int BasePoints;
-	local ArtifactCost Resources;
 
 	Manager = class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager();
 	Techs = Manager.GetAllTemplatesOfClass(class'X2TechTemplate');
@@ -79,9 +143,7 @@ static function UpdateResearchTemplates ()
 	{
 		Tech = X2TechTemplate(TechTemplate);
 		BasePoints = Tech.PointsToComplete;
-		Resources.ItemTemplateName = 'Supplies';
-		Resources.Quantity = Round(BasePoints * default.WaveCOMResearchSupplyCostRatio);
-		Tech.Cost.ResourceCosts.AddItem(Resources);
+		AddSupplyCost(Tech.Cost.ResourceCosts, Round(BasePoints * default.WaveCOMResearchSupplyCostRatio));
 		Tech.bJumpToLabs = false;
 		Tech.PointsToComplete = 0;
 		Manager.AddStrategyElementTemplate(Tech, true);

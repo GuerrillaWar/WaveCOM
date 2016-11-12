@@ -2,7 +2,7 @@
 
 class WaveCOM_UILoadoutButton extends UIScreenListener config(WaveCOM);  
 // This event is triggered after a screen is initialized. This is called after  // the visuals (if any) are loaded in Flash.
-var UIButton Button1, Button2, Button3, Button4, Button5, Button6;
+var UIButton Button1, Button2, Button3, Button4, Button5, Button6, Button7, Button8;
 var UIPanel ActionsPanel;
 var UITacticalHUD TacHUDScreen;
 var WaveCOM_UIArmory_FieldLoadout UIArmory_FieldLoad;
@@ -28,37 +28,58 @@ event OnInit(UIScreen Screen)
 	ActionsPanel.InitPanel('WaveCOMActionsPanel');
 	ActionsPanel.SetSize(450, 100);
 	ActionsPanel.AnchorTopCenter();
-	ActionsPanel.SetX(ActionsPanel.Width * -0.25);
 
 	Button1 = ActionsPanel.Spawn(class'UIButton', ActionsPanel);
 	Button1.InitButton('LoadoutButton', "Loadout", OpenLoadout);
 	Button1.SetY(ActionsPanel.Y);
-	Button1.SetX(ActionsPanel.X);
+	Button1.SetX(0);
+	Button1.SetWidth(170);
 
 	Button6 = ActionsPanel.Spawn(class'UIButton', ActionsPanel);
 	Button6.InitButton('DeploySoldier', "Deploy Soldier - " @CurrentDeployCost, OpenDeployMenu);
 	Button6.SetY(ActionsPanel.Y + 30);
-	Button6.SetX(ActionsPanel.X);
+	Button6.SetX(0);
+	Button6.SetWidth(170);
 
 	Button2 = ActionsPanel.Spawn(class'UIButton', ActionsPanel);
 	Button2.InitButton('BuyButton', "Buy Equipment", OpenBuyMenu);
 	Button2.SetY(ActionsPanel.Y);
-	Button2.SetX(ActionsPanel.X + (ActionsPanel.Width / 2) - (Button2.Width / 2));
+	Button2.SetX(Button1.X + Button1.Width + 30);
+	Button2.SetWidth(120);
 
 	Button4 = ActionsPanel.Spawn(class'UIButton', ActionsPanel);
 	Button4.InitButton('ResearchButton', "Research", OpenResearchMenu);
 	Button4.SetY(ActionsPanel.Y + 30);
-	Button4.SetX(ActionsPanel.X + (ActionsPanel.Width / 2) - (Button4.Width / 2));
+	Button4.SetX(Button1.X + Button1.Width + 30);
+	Button4.SetWidth(120);
 
 	Button3 = ActionsPanel.Spawn(class'UIButton', ActionsPanel);
 	Button3.InitButton('Proving Grounds', "Proving Grounds", OpenProjectMenu);
 	Button3.SetY(ActionsPanel.Y);
-	Button3.SetX(ActionsPanel.X + ActionsPanel.Width - Button3.Width);
+	Button3.SetX(Button4.X + Button4.Width + 30);
+	Button3.SetWidth(120);
 
 	Button5 = ActionsPanel.Spawn(class'UIButton', ActionsPanel);
 	Button5.InitButton('ViewInventory', "View Inventory", OpenStorage);
 	Button5.SetY(ActionsPanel.Y + 30);
-	Button5.SetX(ActionsPanel.X + ActionsPanel.Width - Button5.Width);
+	Button5.SetX(Button4.X + Button4.Width + 30);
+	Button5.SetWidth(120);
+
+	Button7 = ActionsPanel.Spawn(class'UIButton', ActionsPanel);
+	Button7.InitButton('OTS', "Training School", OpenOTSMenu);
+	Button7.SetY(ActionsPanel.Y);
+	Button7.SetX(Button5.X + Button5.Width + 30);
+	Button7.SetWidth(120);
+
+	Button8 = ActionsPanel.Spawn(class'UIButton', ActionsPanel);
+	Button8.InitButton('BlackMarket', "Black Market", OpenBlackMarket);
+	Button8.SetY(ActionsPanel.Y + 30);
+	Button8.SetX(Button5.X + Button5.Width + 30);
+	Button8.SetWidth(120);
+
+	ActionsPanel.SetWidth(Button7.X + Button7.Width - ActionsPanel.X + 50);
+	ActionsPanel.SetX(ActionsPanel.Width * -0.5);
+	ActionsPanel.AnchorTopCenter();
 
 	AvengerHUD = TacHUDScreen.Movie.Pres.Spawn(class'WaveCOM_UIAvengerHUD', TacHUDScreen.Movie.Pres);
 	TacHUDScreen.Movie.Stack.Push(AvengerHUD, TacHUDScreen.Movie);
@@ -81,6 +102,8 @@ event OnInit(UIScreen Screen)
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'UpdateDeployCost', OnDeath, ELD_Immediate);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'ResearchCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'ItemConstructionCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'BlackMarketGoodsSold', UpdateResourceHUD, ELD_OnStateSubmitted);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'BlackMarketPurchase', UpdateResourceHUD, ELD_OnStateSubmitted);
 }
 
 public function XComGameState_Unit GetNonDeployedSoldier()
@@ -146,6 +169,7 @@ private function UpdateDeployCost ()
 
 private function EventListenerReturn OnDeath(Object EventData, Object EventSource, XComGameState NewGameState, Name InEventID)
 {
+	UpdateResources();
 	UpdateDeployCost();
 	return ELR_NoInterrupt;
 }
@@ -175,6 +199,7 @@ public function UpdateResources()
 	AvengerHUD.ClearResources();
 	AvengerHUD.ShowResources();
 	AvengerHUD.UpdateSupplies();
+	AvengerHUD.UpdateIntel();
 	AvengerHUD.UpdateEleriumCores();
 }
 
@@ -205,6 +230,25 @@ public function OpenStorage(UIButton Button)
 	TacHUDScreen.Movie.Stack.Push(LoadedScreen, TacHUDScreen.Movie); 
 }
 
+public function OpenBlackMarket(UIButton Button)
+{
+	local WaveCOM_UIBlackMarket LoadedScreen;
+	local XComGameState NewGameState;
+	local XComGameState_BlackMarket BlackMarket;
+	`log("WaveCOM :: Setting Up State");
+	
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Update Black Market Prices");
+	BlackMarket = XComGameState_BlackMarket(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BlackMarket'));
+	BlackMarket = XComGameState_BlackMarket(NewGameState.CreateStateObject(class'XComGameState_BlackMarket', BlackMarket.ObjectID));
+	NewGameState.AddStateObject(BlackMarket);
+	BlackMarket.UpdateBuyPrices();
+
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	UpdateResources();
+	LoadedScreen = TacHUDScreen.Movie.Pres.Spawn(class'WaveCOM_UIBlackMarket', TacHUDScreen.Movie.Pres);
+	TacHUDScreen.Movie.Stack.Push(LoadedScreen, TacHUDScreen.Movie); 
+}
+
 public function OpenResearchMenu(UIButton Button)
 {
 	local UIChooseResearch LoadedScreen;
@@ -219,6 +263,66 @@ public function OpenProjectMenu(UIButton Button)
 	UpdateResources();
 	LoadedScreen = TacHUDScreen.Movie.Pres.Spawn(class'UIChooseProject', TacHUDScreen.Movie.Pres);
 	TacHUDScreen.Movie.Stack.Push(LoadedScreen, TacHUDScreen.Movie);
+}
+
+public function OpenOTSMenu(UIButton Button)
+{
+	local WaveCOM_UIOfficerTrainingSchool LoadedScreen;
+	local XComGameState_FacilityXCom FacilityState;
+	local X2FacilityTemplate FacilityTemplate;
+	local XComGameState NewGameState;
+	local XComGameState_HeadquartersXCom XComHQ;
+	local TDialogueBoxData  kDialogData;
+
+	UpdateResources();
+
+	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_FacilityXCom', FacilityState)
+	{
+		if (FacilityState.GetMyTemplateName() == 'OfficerTrainingSchool')
+		{
+			break;
+		}
+		else
+		{
+			FacilityState = none;
+		}
+	}
+
+	if (FacilityState == none)
+	{
+		// Create new OTS Facility
+		FacilityTemplate = X2FacilityTemplate(class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager().FindStrategyElementTemplate('OfficerTrainingSchool'));
+		if (FacilityTemplate != none)
+		{
+			NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Adding missing OTS");
+			FacilityState = FacilityTemplate.CreateInstanceFromTemplate(NewGameState);
+			NewGameState.AddStateObject(FacilityState);
+			
+			XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+			XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
+			XComHQ.Facilities.AddItem(FacilityState.GetReference());
+			NewGameState.AddStateObject(XComHQ);
+			FacilityTemplate.OnFacilityBuiltFn(FacilityState.GetReference());
+			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+		}
+	}
+	
+	if (FacilityState != none)
+	{
+		LoadedScreen = TacHUDScreen.Movie.Pres.Spawn(class'WaveCOM_UIOfficerTrainingSchool', TacHUDScreen.Movie.Pres);
+		LoadedScreen.FacilityRef = FacilityState.GetReference();
+		TacHUDScreen.Movie.Stack.Push(LoadedScreen, TacHUDScreen.Movie);
+	}
+	else
+	{
+		kDialogData.eType = eDialog_Alert;
+		kDialogData.strTitle = "Failed to spawn OTS Facility";
+		kDialogData.strText = "Unable to spawn OTS facility, there may be a bug or you are using an older version.";
+
+		kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+
+		`PRES.UIRaiseDialog(kDialogData);
+	}
 }
 
 public function OpenDeployMenu(UIButton Button)

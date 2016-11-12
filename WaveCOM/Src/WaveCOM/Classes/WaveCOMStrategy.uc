@@ -84,9 +84,24 @@ state StartingWaveCOM
 
 		XComHQ.bDontShowSetupMovies = true;
 		XComHQ.AddResource(NewGameState, 'Supplies', (WaveCOMStartingSupplies - XComHQ.GetSupplies()));
-		XComHQ.AddResource(NewGameState, 'Intel', (1000 - XComHQ.GetIntel()));
+		XComHQ.AddResource(NewGameState, 'Intel', (0 - XComHQ.GetIntel())); // Reset to 0 intel
 		XComHQ.AddResource(NewGameState, 'AlienAlloy', (10000 - XComHQ.GetAlienAlloys()));
 		XComHQ.AddResource(NewGameState, 'EleriumDust', (10000 - XComHQ.GetEleriumDust()));
+
+		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	}
+
+	function OpenBlackMarket()
+	{
+		local XComGameStateHistory History;
+		local XComGameState NewGameState;
+		local XComGameState_BlackMarket Market;
+
+		History = `XCOMHISTORY;
+		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Open Black Market");
+		Market = XComGameState_BlackMarket(History.GetSingleGameStateObjectForClass(class'XComGameState_BlackMarket'));
+
+		Market.OpenBlackMarket(NewGameState);
 
 		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 	}
@@ -415,6 +430,8 @@ Begin:
 	GiveScientist();
 	InitSoldiers();
 	InitFacilities();
+
+	OpenBlackMarket();
 
 
 	while(`HQPRES.IsBusy())

@@ -30,6 +30,8 @@ var const config int WaveCOMKillSupplyBonusBase;
 var const config float WaveCOMKillSupplyBonusMultiplier;
 var const config int WaveCOMWaveSupplyBonusBase;
 var const config float WaveCOMWaveSupplyBonusMultiplier;
+var const config int WaveCOMIntelBonusBase;
+var const config float WaveCOMKillIntelBonusBase;
 var const config int WaveCOMPassiveXPPerKill;
 var const config array<int> WaveCOMPodCount;
 var const config array<int> WaveCOMForceLevel;
@@ -39,7 +41,17 @@ delegate EventListenerReturn OnEventDelegate(Object EventData, Object EventSourc
 
 function SetupMissionStartState(XComGameState StartState)
 {
+	local XComGameState NewGameState;
+	local XComGameState_BlackMarket BlackMarket;
 	`log("WaveCOM :: Setting Up State");
+	
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Create Black Market");
+	BlackMarket = XComGameState_BlackMarket(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BlackMarket'));
+	BlackMarket = XComGameState_BlackMarket(NewGameState.CreateStateObject(class'XComGameState_BlackMarket', BlackMarket.ObjectID));
+	NewGameState.AddStateObject(BlackMarket);
+	BlackMarket.ResetBlackMarketGoods(NewGameState);
+
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 }
 
 function RegisterEventHandlers()
@@ -234,7 +246,8 @@ function CollectLootToHQ()
 	local XComGameState_Effect EffectState;
 	local XComGameState_BattleData BattleData;
 	local XComGameState_HeadquartersXCom XComHQ;
-	local int LootIndex, SupplyReward, KillCount;
+	local float FloatingIntel;
+	local int LootIndex, SupplyReward, IntelReward, KillCount;
 	local X2ItemTemplateManager ItemTemplateManager;
 	local XComGameState_Item ItemState;
 	local StateObjectReference AbilityReference, UnitRef;
@@ -281,6 +294,7 @@ function CollectLootToHQ()
 						ItemTemplate = ItemTemplateManager.FindItemTemplate(LootTemplateName);
 						SupplyReward = SupplyReward + Round(ItemTemplate.TradingPostValue * WaveCOMKillSupplyBonusMultiplier);
 						SupplyReward = SupplyReward + WaveCOMKillSupplyBonusBase;
+						FloatingIntel += WaveCOMKillIntelBonusBase;
 						RolledLoot.AddItem(ItemTemplate.DataName);
 					}
 
@@ -356,9 +370,12 @@ function CollectLootToHQ()
 	NewGameState.AddStateObject(ItemState);
 	XComHQ.PutItemInInventory(NewGameState, ItemState, false);
 
-	ItemTemplate = ItemTemplateManager.FindItemTemplate('EleriumCore');
+	IntelReward = WaveCOMIntelBonusBase;
+	IntelReward += Round(FloatingIntel);
+
+	ItemTemplate = ItemTemplateManager.FindItemTemplate('Intel');
 	ItemState = ItemTemplate.CreateInstanceFromTemplate(NewGameState);
-	ItemState.Quantity = 1;
+	ItemState.Quantity = IntelReward;
 	NewGameState.AddStateObject(ItemState);
 	XComHQ.PutItemInInventory(NewGameState, ItemState, false);
 
@@ -403,6 +420,7 @@ function BeginPreparationRound()
 {
 	local XComGameState NewGameState;
 	local WaveCOM_MissionLogic_WaveCOM NewMissionState;
+	local XComGameState_BlackMarket BlackMarket;
 
 	WaveStatus = eWaveStatus_Preparation;
 	CombatStartCountdown = 3;
@@ -413,6 +431,12 @@ function BeginPreparationRound()
 	NewMissionState.CombatStartCountdown = CombatStartCountdown;
 	NewMissionState.WaveStatus = WaveStatus;
 	NewGameState.AddStateObject(NewMissionState);
+
+	BlackMarket = XComGameState_BlackMarket(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BlackMarket'));
+	BlackMarket = XComGameState_BlackMarket(NewGameState.CreateStateObject(class'XComGameState_BlackMarket', BlackMarket.ObjectID));
+	NewGameState.AddStateObject(BlackMarket);
+	BlackMarket.ResetBlackMarketGoods(NewGameState);
+
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 
 	//`XCOMHISTORY.ArchiveHistory("Wave" @ NewMissionState.WaveNumber);
