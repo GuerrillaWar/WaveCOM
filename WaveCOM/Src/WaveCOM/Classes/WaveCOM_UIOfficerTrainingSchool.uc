@@ -7,13 +7,27 @@ function bool OnUnlockOption(int iOption)
 	local XComGameState NewGameState;
 	local XComGameState_Effect EffectState;
 	local StateObjectReference AbilityReference;
+	local XComGameState_Player XComPlayer;
+	local XComGameState_BattleData BattleData;
 	result = super.OnUnlockOption(iOption);
 
 	if (result)
 	{
+		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Update OTS Entries");
+
+		BattleData = XComGameState_BattleData( `XCOMHISTORY.GetSingleGameStateObjectForClass( class'XComGameState_BattleData' ) );
+		XComPlayer = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(BattleData.PlayerTurnOrder[0].ObjectID));
+		XComPlayer = XComGameState_Player(NewGameState.CreateStateObject(class'XComGameState_Player', XComPlayer.ObjectID));
+		XComPlayer.SoldierUnlockTemplates = XComHQ.SoldierUnlockTemplates;
+		NewGameState.AddStateObject(XComPlayer);
+
+		`XEVENTMGR.TriggerEvent('ItemConstructionCompleted',,, NewGameState);
+
+		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
 		foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
 		{
-			if( UnitState.GetTeam() == eTeam_XCom && UnitState.IsAlive() && XComHQ.Squad.Find('ObjectID', UnitState.GetReference().ObjectID) != INDEX_NONE)
+			if( UnitState.GetTeam() == eTeam_XCom && UnitState.IsAlive() && XComHQ.Squad.Find('ObjectID', UnitState.GetReference().ObjectID) != INDEX_NONE && !UnitState.bRemovedFromPlay)
 			{
 				NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Clean Unit State");
 				UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));

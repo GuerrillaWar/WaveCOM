@@ -3,9 +3,27 @@ class WaveCOM_UISL_ListenForUnitReward extends UIScreenListener;
 event OnInit(UIScreen Screen)
 {
 	local Object this;
+	local WaveCOM_UILoadoutButton lo;
 
-	this = self;
-	`XEVENTMGR.RegisterForEvent(this, 'ResearchCompleted', ResearchComplete, ELD_OnStateSubmitted);
+	if (UITacticalHUD(Screen) != none)
+	{
+		this = self;
+		`XEVENTMGR.RegisterForEvent(this, 'ResearchCompleted', ResearchComplete, ELD_OnStateSubmitted);
+		lo = Screen.Spawn(class'WaveCOM_UILoadoutButton', Screen);
+		lo.InitScreen(Screen);
+	}
+}
+
+event OnRemoved(UIScreen Screen)
+{
+	local Object this;
+	
+
+	if (UITacticalHUD(Screen) != none)
+	{
+		this = self;
+		`XEVENTMGR.UnRegisterFromAllEvents(this);
+	}
 }
 
 function EventListenerReturn ResearchComplete(Object EventData, Object EventSource, XComGameState GameState, Name EventID)
@@ -57,5 +75,4 @@ function EventListenerReturn ResearchComplete(Object EventData, Object EventSour
 
 defaultproperties
 {
-	ScreenClass=class'UITacticalHUD';
 }

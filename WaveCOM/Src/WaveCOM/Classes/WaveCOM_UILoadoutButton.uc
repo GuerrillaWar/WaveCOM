@@ -1,6 +1,6 @@
 // This is an Unreal Script
 
-class WaveCOM_UILoadoutButton extends UIScreenListener config(WaveCOM);  
+class WaveCOM_UILoadoutButton extends UIPanel config(WaveCOM);  
 // This event is triggered after a screen is initialized. This is called after  // the visuals (if any) are loaded in Flash.
 var UIButton Button1, Button2, Button3, Button4, Button5, Button6, Button7, Button8;
 var UIPanel ActionsPanel;
@@ -11,7 +11,7 @@ var WaveCOM_UIAvengerHUD AvengerHUD;
 var const config array<int> WaveCOMDeployCosts;
 var int CurrentDeployCost;
 
-event OnInit(UIScreen Screen)
+simulated function InitScreen(UIScreen ScreenParent)
 {
 	local Object ThisObj;
 	local WaveCOM_MissionLogic_WaveCOM WaveLogic;
@@ -21,7 +21,7 @@ event OnInit(UIScreen Screen)
 	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchTemplates();
 	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateSchematicTemplates();
 
-	TacHUDScreen = UITacticalHUD(Screen);
+	TacHUDScreen = UITacticalHUD(ScreenParent);
 	`log("Loading my button thing.");
 
 	ActionsPanel = TacHUDScreen.Spawn(class'UIPanel', TacHUDScreen);
@@ -100,6 +100,7 @@ event OnInit(UIScreen Screen)
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'WaveCOM_WaveEnd', OnWaveEnd, ELD_Immediate);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'UnitDied', OnDeath, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'UpdateDeployCost', OnDeath, ELD_Immediate);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'UpdateDeployCostDelayed', OnDeath, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'ResearchCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'ItemConstructionCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'BlackMarketGoodsSold', UpdateResourceHUD, ELD_OnStateSubmitted);
@@ -118,7 +119,7 @@ public function XComGameState_Unit GetNonDeployedSoldier()
 		foreach XComHQ.Squad(UnitRef)
 		{
 			UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitRef.ObjectID));
-			if (UnitState != none && UnitState.IsAlive() && UnitState.Abilities.Length == 0) // Uninitialized
+			if (UnitState != none && UnitState.IsAlive() && (UnitState.Abilities.Length == 0 || UnitState.bRemovedFromPlay)) // Uninitialized
 			{
 				return UnitState;
 			}
@@ -302,8 +303,8 @@ public function OpenOTSMenu(UIButton Button)
 			XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
 			XComHQ.Facilities.AddItem(FacilityState.GetReference());
 			NewGameState.AddStateObject(XComHQ);
-			FacilityTemplate.OnFacilityBuiltFn(FacilityState.GetReference());
 			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+			FacilityTemplate.OnFacilityBuiltFn(FacilityState.GetReference());
 		}
 	}
 	
@@ -467,7 +468,7 @@ private static function XComGameState_Unit ChooseStrategyUnit(XComGameStateHisto
 		}
 
 		// only if not already on the board
-		if(XComHQ.Squad.Find('ObjectID', StrategyUnit.ObjectID) != INDEX_NONE)
+		if(XComHQ.Squad.Find('ObjectID', StrategyUnit.ObjectID) != INDEX_NONE || StrategyUnit.bRemovedFromPlay)
 		{
 			`log("UnitState already part of squad",, 'WaveCOM');
 			continue;
@@ -515,7 +516,7 @@ static function XComGameState_Unit AddStrategyUnitToBoard(XComGameState_Unit Uni
 {
 	local X2TacticalGameRuleset Rules;
 	local Vector SpawnLocation;
-	local XComGameStateContext_TacticalGameRule NewGameStateContext;
+	local XComGameStateContext_TacticalGameRule NewGameStateContext, CheatContext;
 	local XComGameState NewGameState;
 	local XComGameState_Player PlayerState;
 	local StateObjectReference ItemReference;
@@ -539,8 +540,9 @@ static function XComGameState_Unit AddStrategyUnitToBoard(XComGameState_Unit Uni
 	NewGameStateContext = class'XComGameStateContext_TacticalGameRule'.static.BuildContextFromGameRule(eGameRule_UnitAdded);
 	NewGameState = History.CreateNewGameState(true, NewGameStateContext);
 	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', Unit.ObjectID));
-	Unit.SetVisibilityLocationFromVector(SpawnLocation);
 	Unit.bSpawnedFromAvenger = true;
+	Unit.ClearRemovedFromPlayFlag();
+	Unit.SetVisibilityLocationFromVector(SpawnLocation);
 
 	// assign the new unit to the human team
 	foreach History.IterateByClassType(class'XComGameState_Player', PlayerState)
@@ -591,11 +593,15 @@ static function XComGameState_Unit AddStrategyUnitToBoard(XComGameState_Unit Uni
 	XComGameStateContext_TacticalGameRule(NewGameState.GetContext()).UnitRef = Unit.GetReference();
 	Rules.SubmitGameState(NewGameState);
 
+	// Do Proper teleport to update visualization
+	CheatContext = XComGameStateContext_TacticalGameRule(class'XComGameStateContext_TacticalGameRule'.static.CreateXComGameStateContext());
+	CheatContext.GameRuleType = eGameRule_ReplaySync;
+	NewGameState = History.CreateNewGameState(true, CheatContext);
+	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', Unit.ObjectID));
+	Unit.SetVisibilityLocationFromVector(SpawnLocation);
+	NewGameState.AddStateObject(Unit);
+
+	`TACTICALRULES.SubmitGameState(NewGameState);
+
 	return Unit;
-}
-
-
-defaultproperties
-{
-	ScreenClass = class'UITacticalHUD';
 }

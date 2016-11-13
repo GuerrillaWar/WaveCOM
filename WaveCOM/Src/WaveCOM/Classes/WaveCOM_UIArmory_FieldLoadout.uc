@@ -362,25 +362,16 @@ simulated function InitArmory(StateObjectReference UnitRef, optional name DispEv
 	CheckForCustomizationPopup();
 }
 
-simulated function ResetUnitState()
+static function RefillInventory(XComGameState NewGameState, XComGameState_Unit Unit)
 {
-	local XComGameState_Unit Unit, CosmeticUnit;
-	local XComGameState_Item ItemState, NewItemState, NewBaseItemState, BaseItem;
-	local XComGameState NewGameState;
 	local array<name> UtilityItemTypes;
 	local name ItemTemplateName;
 	local StateObjectReference ItemReference, BlankReference;
 	local array<XComGameState_Item> UtilityItems, GrenadeItems, MergableItems;
 	local X2EquipmentTemplate EquipmentTemplate;
 	local int BaseAmmo; 
-	local object ThisObj;
-
-	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh unit consumables");
-
-	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitReference.ObjectID));
-	NewGameState.AddStateObject(Unit);
-
-	CleanUpStats(NewGameState, Unit);
+	local XComGameState_Item ItemState, NewItemState, NewBaseItemState, BaseItem;
+	local XComGameState_Unit CosmeticUnit;
 
 	UtilityItems = Unit.GetAllItemsInSlot(eInvSlot_Utility);
 	GrenadeItems = Unit.GetAllItemsInSlot(eInvSlot_GrenadePocket);
@@ -529,6 +520,23 @@ simulated function ResetUnitState()
 	
 	
 	Unit.ValidateLoadout(NewGameState);
+}
+
+simulated function ResetUnitState()
+{
+	local XComGameState_Unit Unit;
+	local XComGameState NewGameState;
+	local object ThisObj;
+
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh unit consumables");
+
+	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitReference.ObjectID));
+	NewGameState.AddStateObject(Unit);
+
+	CleanUpStats(NewGameState, Unit);
+
+	// Remerge Inventory
+	RefillInventory(NewGameState, Unit);
 
 	// Every new wave should act as if it's a new mission
 	Unit.CleanupUnitValues(eCleanup_BeginTactical);

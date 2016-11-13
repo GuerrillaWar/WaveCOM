@@ -41,17 +41,62 @@ delegate EventListenerReturn OnEventDelegate(Object EventData, Object EventSourc
 
 function SetupMissionStartState(XComGameState StartState)
 {
-	local XComGameState NewGameState;
 	local XComGameState_BlackMarket BlackMarket;
+	local XComGameState_Unit UnitState, LastUnit;
+	local bool IsUnitStuck;
+	local StateObjectReference AbilityReference;
+	local TTile LastTile;
+
 	`log("WaveCOM :: Setting Up State");
 	
-	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Create Black Market");
 	BlackMarket = XComGameState_BlackMarket(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BlackMarket'));
-	BlackMarket = XComGameState_BlackMarket(NewGameState.CreateStateObject(class'XComGameState_BlackMarket', BlackMarket.ObjectID));
-	NewGameState.AddStateObject(BlackMarket);
-	BlackMarket.ResetBlackMarketGoods(NewGameState);
+	BlackMarket = XComGameState_BlackMarket(StartState.CreateStateObject(class'XComGameState_BlackMarket', BlackMarket.ObjectID));
+	StartState.AddStateObject(BlackMarket);
+	BlackMarket.ResetBlackMarketGoods(StartState);
 
-	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	LastTile.Z = 9999;
+
+	// Remove excess Units
+	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
+	{
+		if (`XCOMHQ.Squad.Find('ObjectID', UnitState.GetReference().ObjectID) != INDEX_NONE)
+		{
+			if (UnitState.TileLocation == LastTile) // NO valid spawn location for them
+			{
+				if (!IsUnitStuck && LastUnit != none)
+				{
+					// The last unit is stuck as well, remove it
+					LastUnit = XComGameState_Unit(StartState.CreateStateObject(class'XComGameState_Unit', LastUnit.ObjectID));
+					`log("Cleaning Abilities");
+					foreach LastUnit.Abilities(AbilityReference)
+					{
+						StartState.RemoveStateObject(AbilityReference.ObjectID);
+					}
+					LastUnit.Abilities.Length = 0;
+					class'WaveCOM_UIArmory_FieldLoadout'.static.CleanUpStats(StartState, LastUnit);
+					LastUnit.RemoveUnitFromPlay();
+					StartState.AddStateObject(LastUnit);
+				}
+				IsUnitStuck = true;
+				`log("Cleaning Abilities");
+				foreach UnitState.Abilities(AbilityReference)
+				{
+					StartState.RemoveStateObject(AbilityReference.ObjectID);
+				}
+				UnitState = XComGameState_Unit(StartState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
+				UnitState.Abilities.Length = 0;
+				class'WaveCOM_UIArmory_FieldLoadout'.static.CleanUpStats(StartState, UnitState);
+				UnitState.RemoveUnitFromPlay();
+				StartState.AddStateObject(UnitState);
+				`XWORLD.ClearTileBlockedByUnitFlag(UnitState);
+				`XEVENTMGR.TriggerEvent('UpdateDeployCostDelayed',,, StartState);
+			}
+			LastTile = UnitState.TileLocation;
+			LastUnit = UnitState;
+		}
+	}
+
+	UpdateCombatCountdown(StartState);
 }
 
 function RegisterEventHandlers()
@@ -62,15 +107,21 @@ function RegisterEventHandlers()
 	OnNoPlayableUnitsRemaining(HandleTeamDead);
 }
 
-function UpdateCombatCountdown()
+function UpdateCombatCountdown(optional XComGameState NewGameState)
 {
 	if (WaveStatus == eWaveStatus_Preparation)
 	{
-		ModifyMissionTimer(true, CombatStartCountdown, "Prepare", "Next Wave in", Bad_Red);
+		if (NewGameState != none)
+			ModifyMissionTimerInState(true, CombatStartCountdown, "Prepare", "Next Wave in", Bad_Red, NewGameState);
+		else
+			ModifyMissionTimer(true, CombatStartCountdown, "Prepare", "Next Wave in", Bad_Red);
 	}
 	else
 	{
-		ModifyMissionTimer(true, WaveNumber, "Wave Number", "In Progress"); // hide timer
+		if (NewGameState != none)
+			ModifyMissionTimerInState(true, WaveNumber, "Wave Number", "In Progress",, NewGameState); // hide timer
+		else
+			ModifyMissionTimer(true, WaveNumber, "Wave Number", "In Progress"); // hide timer
 	}
 }
 
@@ -405,10 +456,12 @@ function CollectLootToHQ()
 				EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
 			}
 
+			class'WaveCOM_UIArmory_FieldLoadout'.static.RefillInventory(NewGameState, UnitState);
+
 			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 			
 			UnitRef = UnitState.GetReference();
-			if (UnitState.IsAlive() && XComHQ.Squad.Find('ObjectID', UnitRef.ObjectID) != INDEX_NONE)
+			if (UnitState.IsAlive() && XComHQ.Squad.Find('ObjectID', UnitRef.ObjectID) != INDEX_NONE && !UnitState.bRemovedFromPlay)
 			{
 				class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnit(UnitRef.ObjectID);
 			}

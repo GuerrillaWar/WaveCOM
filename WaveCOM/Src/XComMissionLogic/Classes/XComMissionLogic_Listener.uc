@@ -24,6 +24,7 @@ function EventListenerReturn LoadRelevantMissionLogic(Object EventData, Object E
 	local MissionLogicBinding LogicBinding;
 	local class<XComGameState_MissionLogic> MissionLogicClass;
 	local string MissionType;
+	`log("XComMissionLogic :: Start Loading Mission Logic");
 
 	BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BattleData'));
 	MissionType = BattleData.MapData.ActiveMission.sType;
@@ -37,12 +38,33 @@ function EventListenerReturn LoadRelevantMissionLogic(Object EventData, Object E
 
 			if (!X2TacticalGameRuleset(`XCOMGAME.GameRuleset).bLoadingSavedGame)
 			{
-				MissionLogic = XComGameState_MissionLogic(NewGameState.CreateStateObject(MissionLogicClass));
+				MissionLogic = XComGameState_MissionLogic(`XCOMHISTORY.GetSingleGameStateObjectForClass(MissionLogicClass));
+				if (MissionLogic != none && !MissionLogic.bIsBeingTransferred)
+				{
+					// Discard any old mission logics
+					`log("XComMissionLogic :: Old Mission Logic found, deleting");
+					NewGameState.RemoveStateObject(MissionLogic.ObjectID);
+					MissionLogic = none;
+				}
+				`log("XComMissionLogic :: Created mission logic " @ LogicBinding.MissionLogicClass);
+
+				if (MissionLogic != none && MissionLogic.bIsBeingTransferred)
+				{
+					// Clear the flag so it gets transferred properly next time
+					`log("XComMissionLogic :: Found transferring MissionLogic of same type, preserving...");
+					MissionLogic = XComGameState_MissionLogic(NewGameState.CreateStateObject(MissionLogicClass, MissionLogic.ObjectID));
+					MissionLogic.bIsBeingTransferred = false;
+				}
+				else
+				{
+					MissionLogic = XComGameState_MissionLogic(NewGameState.CreateStateObject(MissionLogicClass));
+				}
 				NewGameState.AddStateObject(MissionLogic);
 				MissionLogic.SetupMissionStartState(NewGameState);
 			}
 			else
 			{
+				`log("XComMissionLogic :: Loaded single mission logic " @ LogicBinding.MissionLogicClass);
 				MissionLogic = XComGameState_MissionLogic(`XCOMHISTORY.GetSingleGameStateObjectForClass(MissionLogicClass));
 				NewGameState.AddStateObject(MissionLogic);
 			}

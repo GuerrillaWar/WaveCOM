@@ -321,7 +321,7 @@ static function UpgradeItems(XComGameState NewGameState, XComGameState_Item Item
 						// Then add the new item to the soldier in the same slot
 						Soldiers[iSoldier].AddItemToInventory(UpgradedItemState, InventorySlot, NewGameState);
 						UnitRef = Soldiers[iSoldier].GetReference();
-						if (Soldiers[iSoldier].IsAlive() && XComHQ.Squad.Find('ObjectID', UnitRef.ObjectID) != INDEX_NONE)
+						if (Soldiers[iSoldier].IsAlive() && XComHQ.Squad.Find('ObjectID', UnitRef.ObjectID) != INDEX_NONE && !Soldiers[iSoldier].bRemovedFromPlay)
 						{
 							Visualizer = XGUnit(Soldiers[iSoldier].FindOrCreateVisualizer());
 							Soldiers[iSoldier].SyncVisualizer(NewGameState);
@@ -396,4 +396,131 @@ exec function AddItemWaveCom(string strItemTemplate, optional int Quantity = 1, 
 	NewGameState.AddStateObject(HQState);
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 	`log("Added item" @ strItemTemplate @ "object id" @ ItemState.ObjectID);
+}
+
+exec function RefreshOTS()
+{
+	local XComGameState_Player XComPlayer;
+	local XComGameState_BattleData BattleData;
+	local XComGameState NewGameState;
+
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Update OTS Entries");
+	
+	BattleData = XComGameState_BattleData( `XCOMHISTORY.GetSingleGameStateObjectForClass( class'XComGameState_BattleData' ) );
+	XComPlayer = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(BattleData.PlayerTurnOrder[0].ObjectID));
+	XComPlayer = XComGameState_Player(NewGameState.CreateStateObject(class'XComGameState_Player', XComPlayer.ObjectID));
+	XComPlayer.SoldierUnlockTemplates = `XCOMHQ.SoldierUnlockTemplates;
+	NewGameState.AddStateObject(XComPlayer);
+
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+}
+
+exec function WaveCOMTransferToNewMission()
+{
+	local XComPlayerController PlayerController;
+	local string MissionType;
+	local MissionDefinition MissionDef;
+	local array<string> MissionTypes;
+	local WaveCOM_MissionLogic_WaveCOM MissionLogic;
+	local XComGameState NewGameState;
+
+	MissionLogic = WaveCOM_MissionLogic_WaveCOM(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'WaveCOM_MissionLogic_WaveCOM'));
+	if (MissionLogic != none)
+	{
+		`log("=-=-=-=-=-=-= Preparing to transfer MissionLogic =-=-=-=-=-=-=",, 'WaveCOM');
+		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Preparing Mission Logic for transfer");
+		MissionLogic = WaveCOM_MissionLogic_WaveCOM(NewGameState.CreateStateObject(class'WaveCOM_MissionLogic_WaveCOM', MissionLogic.ObjectID));
+		MissionLogic.bIsBeingTransferred = true;
+		// Reset to pre wave start
+		MissionLogic.WaveStatus = eWaveStatus_Preparation;
+		MissionLogic.CombatStartCountdown = 3;
+		MissionLogic.UnregisterAllObservers();
+		NewGameState.AddStateObject(MissionLogic);
+		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	}
+
+	foreach class'XComTacticalMissionManager'.default.arrMissions(MissionDef)
+	{
+		if (MissionDef.MissionFamily == "WaveCOM")
+			MissionTypes.AddItem(MissionDef.sType);
+	}
+	
+	MissionType = MissionTypes[`SYNC_RAND(MissionTypes.Length)];
+
+	`log("Transfering to new mission...",, 'WaveCOM');
+	PlayerController = XComPlayerController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	PlayerController.TransferToNewMission(MissionType);
+}
+
+exec function DebugMissionLogic()
+{
+	local WaveCOM_MissionLogic_WaveCOM WaveLogic;
+	local TDialogueBoxData  kDialogData;
+	local eWaveStatus DebugResult;
+
+	WaveLogic = WaveCOM_MissionLogic_WaveCOM(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'WaveCOM_MissionLogic_WaveCOM'));
+	if (WaveLogic != none)
+	{
+		kDialogData.eType = eDialog_Alert;
+		kDialogData.strTitle = "Mission Logic status";
+		DebugResult = eWaveStatus(WaveLogic.WaveStatus);
+		kDialogData.strText = "Wave:" @ WaveLogic.WaveNumber $ ", status:" @ DebugResult $ ", countdown:" @ WaveLogic.CombatStartCountdown;
+		kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+
+		`PRES.UIRaiseDialog(kDialogData);
+	}
+	else
+	{
+		kDialogData.eType = eDialog_Alert;
+		kDialogData.strTitle = "No mission logic found";
+		kDialogData.strText = "Unable to find MissionLogic.";
+
+		kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+
+		`PRES.UIRaiseDialog(kDialogData);
+	}
+}
+
+static event ModifyTacticalTransferStartState(XComGameState TransferStartState)
+{
+	local WaveCOM_MissionLogic_WaveCOM WaveLogic, MissionLogic;
+	local XComGameState_UITimer UITimer;
+	local int WaveID;
+	`log("=*=*=*=*=*=*= Tactical Transfer code executed successfully! =*=*=*=*=*=*=",, 'WaveCOM');
+	`log("Start state size" @ TransferStartState.GetNumGameStateObjects(),, 'WaveCOM');
+
+	WaveLogic = WaveCOM_MissionLogic_WaveCOM(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'WaveCOM_MissionLogic_WaveCOM'));
+	if (WaveLogic != none)
+	{
+		WaveID = WaveLogic.ObjectID;
+		WaveLogic = WaveCOM_MissionLogic_WaveCOM(TransferStartState.GetGameStateForObjectID(WaveLogic.ObjectID));
+		if (WaveLogic == none)
+		{
+			`log("Mission Logic not transferred, forcing one",, 'WaveCOM');
+			WaveLogic = WaveCOM_MissionLogic_WaveCOM(TransferStartState.CreateStateObject(class'WaveCOM_MissionLogic_WaveCOM', WaveID));
+		}
+		MissionLogic.bIsBeingTransferred = true;
+		// Reset to pre wave start
+		MissionLogic.WaveStatus = eWaveStatus_Preparation;
+		MissionLogic.CombatStartCountdown = 3;
+		MissionLogic.UnregisterAllObservers();
+	}
+	else
+	{
+		foreach TransferStartState.IterateByClassType(class'WaveCOM_MissionLogic_WaveCOM', WaveLogic)
+		{
+			`log("Found transfering mission logic, turning on Being transferred flag",, 'WaveCOM');
+			MissionLogic.bIsBeingTransferred = true;
+			// Reset to pre wave start
+			MissionLogic.WaveStatus = eWaveStatus_Preparation;
+			MissionLogic.CombatStartCountdown = 3;
+			MissionLogic.UnregisterAllObservers();
+		}
+	}
+	UITimer = XComGameState_UITimer(`XCOMHISTORY.GetSingleGameStateObjectForClass(class 'XComGameState_UITimer', true));
+	if (UITimer != none)
+	{
+		// We will make a new UI Timer next round
+		TransferStartState.RemoveStateObject(UITimer.ObjectID);
+	}
 }

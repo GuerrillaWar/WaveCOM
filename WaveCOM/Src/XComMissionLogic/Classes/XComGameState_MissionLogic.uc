@@ -23,6 +23,8 @@ var private bool bHasRegisteredEventObservers;
 //Prevents the calls that detect this condition from triggering multiple times for the same game state frame.
 var private array<XGPlayer> TriggeredNoPlayableUnits_PlayerList; 
 
+var bool bIsBeingTransferred;
+
 delegate OnNoPlayableUnitsRemainingDelegate(XGPlayer TeamOutOfUnits);
 
 
@@ -53,6 +55,15 @@ function OnNoPlayableUnitsRemaining (delegate<OnNoPlayableUnitsRemainingDelegate
 {
 	RegisterRulesetObserver();
 	NoPlayableUnitsRemainingEvents.AddItem(Listener);
+}
+
+function UnregisterAllObservers()
+{
+	local Object ThisObj;
+	ThisObj = self;
+	`XEVENTMGR.UnRegisterFromAllEvents(ThisObj);
+	NoPlayableUnitsRemainingEvents.Length = 0;
+	bHasRegisteredEventObservers = false;
 }
 
 function RegisterRulesetObserver ()
@@ -91,12 +102,14 @@ function bool EventAbilityIs(string AbilityTemplateFilter, Object EventData, XCo
 	return false;
 }
 
-function ModifyMissionTimer(bool Show, int NumTurns = 0, string DisplayMsgTitle = "",
-							string DisplayMsgSubtitle = "", TimerColors TimerColor = Normal_Blue)
+function ModifyMissionTimerInState(bool Show, int NumTurns = 0, string DisplayMsgTitle = "",
+							string DisplayMsgSubtitle = "", TimerColors TimerColor = Normal_Blue, optional XComGameState NewGameState)
 {
 	local int UIState;
-	local XComGameState NewGameState;
 	local XComGameState_UITimer UiTimer;
+
+	if (NewGameState == none)
+		return;
 
 	switch(TimerColor)
 	{
@@ -107,7 +120,6 @@ function ModifyMissionTimer(bool Show, int NumTurns = 0, string DisplayMsgTitle 
 	}
 
 	UiTimer = XComGameState_UITimer(`XCOMHISTORY.GetSingleGameStateObjectForClass(class 'XComGameState_UITimer', true));
-	NewGameState = class 'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Objective Timer changes");
 	if (UiTimer == none)
 		UiTimer = XComGameState_UITimer(NewGameState.CreateStateObject(class 'XComGameState_UITimer'));
 	else
@@ -120,6 +132,16 @@ function ModifyMissionTimer(bool Show, int NumTurns = 0, string DisplayMsgTitle 
 	UiTimer.TimerValue = NumTurns;
 	
 	NewGameState.AddStateObject(UiTimer);
+}
+
+function ModifyMissionTimer(bool Show, int NumTurns = 0, string DisplayMsgTitle = "",
+							string DisplayMsgSubtitle = "", TimerColors TimerColor = Normal_Blue)
+{
+	local XComGameState NewGameState;
+	NewGameState = class 'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Objective Timer changes");
+
+	ModifyMissionTimerInState(Show, NumTurns, DisplayMsgTitle, DisplayMsgSubtitle, TimerColor, NewGameState);
+	
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 }
 
@@ -406,5 +428,6 @@ private function CheckForSquadVisiblePoints(XComGameState NewGameState)
 
 defaultproperties
 {
-	bHasRegisteredEventObservers = false
+	bHasRegisteredEventObservers = false;
+	bIsBeingTransferred = false;
 }

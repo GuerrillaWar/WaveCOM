@@ -8,6 +8,7 @@ var const config int WaveCOMStartingSupplies;
 function LoadGame()
 {
 	`STRATEGYRULES.StartNewGame();
+	`log("Access state: WaveCOMLoadingGame",, 'WaveCOM');
 	GoToState('WaveCOMLoadingGame');
 }
 
@@ -20,8 +21,8 @@ function TransferFromTactical()
 state WaveCOMStartingFromTactical
 {
 Begin:		
+	`log("Access state: WaveCOMStartingFromTactical",, 'WaveCOM');
 	`HQPRES.UIEnterStrategyMap();
-		
 	// Movie will have already played so jump to player stats screen
 	`HQPRES.UIYouWin();
 }
@@ -42,6 +43,7 @@ Begin:
 	if( `XCOMHISTORY.GetNumGameStates() == 1 )
 	{	
 		// New Game
+		`log("Access state: StartWaveCOM",, 'WaveCOM');
 		StartWaveCOM();
 	}
 	else
@@ -50,11 +52,13 @@ Begin:
 		if(m_bLoadedFromSave)
 		{
 			// Somehow we loaded to strategy side. Give us a new WaveCOM mission
+			`log("Access state: LoadGame",, 'WaveCOM');
 			LoadGame();
 		}
 		else
 		{
 			// We probably evac'd. End the Game.
+			`log("Access state: TransferFromTactical",, 'WaveCOM');
 			TransferFromTactical();
 		}
 	}
