@@ -173,9 +173,9 @@ function EventListenerReturn Countdown(Object EventData, Object EventSource, XCo
 		{
 			InitiateWave();
 		}
-
-		UpdateCombatCountdown();
 	}
+
+	UpdateCombatCountdown();
 	return ELR_NoInterrupt;
 }
 

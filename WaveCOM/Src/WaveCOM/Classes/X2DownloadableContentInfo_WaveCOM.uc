@@ -20,6 +20,7 @@ static event OnPostTemplatesCreated()
 	`log("WaveCOM :: Present And Correct");
 	PatchOutUselessOTS();
 	MakeEleriumAlloyUnsellable();
+	AddContinentsToOTS();
 }
 
 static function MakeEleriumAlloyUnsellable()
@@ -60,6 +61,26 @@ static function PatchOutUselessOTS()
 			{
 				FacilityTemplate.SoldierUnlockTemplates.RemoveItem(OTSName);
 			}
+		}
+	}
+}
+
+static function AddContinentsToOTS()
+{
+	local X2FacilityTemplate FacilityTemplate;
+	local X2DataTemplate Template;
+	local array<X2DataTemplate> FacilityTemplates;
+
+	class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager().FindDataTemplateAllDifficulties('OfficerTrainingSchool', FacilityTemplates);
+	foreach FacilityTemplates(Template)
+	{
+		FacilityTemplate = X2FacilityTemplate(Template);
+		if (FacilityTemplate != none)
+		{
+			FacilityTemplate.SoldierUnlockTemplates.AddItem('WaveCOM_QuidUnlock');
+			FacilityTemplate.SoldierUnlockTemplates.AddItem('WaveCOM_LockNLoadUnlock');
+			FacilityTemplate.SoldierUnlockTemplates.AddItem('WaveCOM_SparePartsUnlock');
+			FacilityTemplate.SoldierUnlockTemplates.AddItem('WaveCOM_ArmedToTeethUnlock');
 		}
 	}
 }
@@ -493,11 +514,11 @@ static event ModifyTacticalTransferStartState(XComGameState TransferStartState)
 	if (WaveLogic != none)
 	{
 		WaveID = WaveLogic.ObjectID;
-		WaveLogic = WaveCOM_MissionLogic_WaveCOM(TransferStartState.GetGameStateForObjectID(WaveLogic.ObjectID));
-		if (WaveLogic == none)
+		MissionLogic = WaveCOM_MissionLogic_WaveCOM(TransferStartState.GetGameStateForObjectID(WaveLogic.ObjectID));
+		if (MissionLogic == none)
 		{
 			`log("Mission Logic not transferred, forcing one",, 'WaveCOM');
-			WaveLogic = WaveCOM_MissionLogic_WaveCOM(TransferStartState.CreateStateObject(class'WaveCOM_MissionLogic_WaveCOM', WaveID));
+			MissionLogic = WaveCOM_MissionLogic_WaveCOM(TransferStartState.CreateStateObject(class'WaveCOM_MissionLogic_WaveCOM', WaveID));
 		}
 		MissionLogic.bIsBeingTransferred = true;
 		// Reset to pre wave start
@@ -523,4 +544,90 @@ static event ModifyTacticalTransferStartState(XComGameState TransferStartState)
 		// We will make a new UI Timer next round
 		TransferStartState.RemoveStateObject(UITimer.ObjectID);
 	}
+}
+
+exec function RemoveAllUnusedEnemyStateObjects()
+{
+	local XComGameState NewGameState;
+	local XComGameState_Unit UnitState;
+	local int totalUnitState, totalAliens, removedStates;
+	local StateObjectReference AbilityReference, ItemReference;
+
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Spring cleaning");
+
+	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
+	{
+		totalUnitState++;
+		if (UnitState.GetTeam() == eTeam_Alien)
+		{
+			totalAliens++;
+			if (UnitState.bRemovedFromPlay)
+			{
+				removedStates++;
+				// Remove all abilities
+				foreach UnitState.Abilities(AbilityReference)
+				{
+					if (`XCOMHISTORY.GetGameStateForObjectID(AbilityReference.ObjectID) != none)
+					{
+						removedStates++;
+						NewGameState.RemoveStateObject(AbilityReference.ObjectID);
+					}
+				}
+				// Remove all items
+				foreach UnitState.InventoryItems(ItemReference)
+				{
+					if (XComGameState_Item(`XCOMHISTORY.GetGameStateForObjectID(ItemReference.ObjectID)) != none &&
+						XComGameState_Item(`XCOMHISTORY.GetGameStateForObjectID(ItemReference.ObjectID)).OwnerStateObject.ObjectID == UnitState.GetReference().ObjectID)
+					{
+						removedStates++;
+						NewGameState.RemoveStateObject(ItemReference.ObjectID);
+					}
+				}
+				NewGameState.RemoveStateObject(UnitState.ObjectID);
+			}
+		}
+	}
+
+	`log(" WaveCOM :: Total unit state:" @ totalUnitState $ ", total aliens:" @ totalAliens $", removed" @ removedStates);
+
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+}
+
+exec function DebugAllGameStateTypes()
+{
+	local XComGameState_BaseObject GameState;
+	local int totalStates, destructibles, units, items, abilities, effects, loot;
+	local TDialogueBoxData  kDialogData;
+
+	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_BaseObject', GameState)
+	{
+		totalStates++;
+		if (GameState.class == class'XComGameState_Destructible')
+			destructibles++;
+		if (GameState.class == class'XComGameState_Unit')
+			units++;
+		if (GameState.class == class'XComGameState_Item')
+			items++;
+		if (GameState.class == class'XComGameState_Ability')
+			abilities++;
+		if (GameState.class == class'XComGameState_Effect')
+			effects++;
+		if (GameState.class == class'XComGameState_LootDrop')
+			loot++;
+	}
+
+	kDialogData.eType = eDialog_Alert;
+	kDialogData.strTitle = "Total number of game states:" @ totalStates;
+
+	kDialogData.strText = "Numbers:\n";
+	kDialogData.strText $= "Units:" @ units $ "\n";
+	kDialogData.strText $= "Items:" @ items $ "\n";
+	kDialogData.strText $= "Abilities:" @ abilities $ "\n";
+	kDialogData.strText $= "Effects:" @ effects $ "\n";
+	kDialogData.strText $= "Loot drps:" @ loot $ "\n";
+	kDialogData.strText $= "Destructibles:" @ destructibles $ "\n";
+
+	kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+
+	`PRES.UIRaiseDialog(kDialogData);
 }

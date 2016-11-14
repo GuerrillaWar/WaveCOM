@@ -64,6 +64,9 @@ Known Issues
     <Content Include="Config\XComWaveCOM.ini">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Localization\WaveCOM.int">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="ReadMe.txt" />
     <Content Include="ModPreview.jpg" />
     <Content Include="Config\XComEditor.ini" />
@@ -73,7 +76,13 @@ Known Issues
     <Content Include="Src\WaveCOM\Classes\WaveCOMMissionSource.uc">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOMSoldierContinentBonusUnlockTemplate.uc">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOMStrategy.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOMStrategyElement_AcademyUnlocks.uc">
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOMXComGameState_BlackMarket.uc">
@@ -119,6 +128,9 @@ Known Issues
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UIOfficerTrainingSchool.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UIPsiTraining.uc">
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UISL_ListenForUnitReward.uc">

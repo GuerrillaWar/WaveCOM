@@ -37,11 +37,13 @@ simulated function OnAccept()
 		break;
 	case 4: // PROMOTE
 		if( GetUnit().GetRank() >= 1 || GetUnit().CanRankUpSoldier() || GetUnit().HasAvailablePerksToAssign() )
-
 			Push_UIArmory_Promotion(UnitReference);
 		break;
 	case 5: // DISMISS
 		OnDismissUnit();
+		break;
+	case 6: // BECOME PSIONIC
+		PsiPromoteDialog();
 		break;
 	}
 	`XSTRATEGYSOUNDMGR.PlaySoundEvent("Play_MenuSelect");
@@ -301,6 +303,7 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 	if (GetUnit().CanRankUpSoldier())
 	{
 		XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom', true));
+		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
 		CleanUpStats(NewGameState, UnitState);
 		UnitState.RankUpSoldier(NewGameState, XComHQ.SelectNextSoldierClass());	
 		if (UnitState.GetRank() == 1)
@@ -323,11 +326,96 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 
 	if (UnitState.GetSoldierClassTemplateName() == 'PsiOperative')
-		PromotionUI = UIArmory_PromotionPsiOp(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'UIArmory_PromotionPsiOp', TacHUDScreen)));
+		PromotionUI = WaveCOM_UIPsiTraining(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'WaveCOM_UIPsiTraining', TacHUDScreen)));
 	else
 		PromotionUI = WaveCOM_UIArmory_Promotion(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'WaveCOM_UIArmory_Promotion', TacHUDScreen)));
 	
 	PromotionUI.InitPromotion(UnitRef, bInstantTransition);
+}
+
+
+simulated function PsiPromoteDialog()
+{
+	local XGParamTag LocTag;
+	local TDialogueBoxData DialogData;
+	local UICallbackData_StateObjectReference CallbackData;
+	local XComGameState_Unit Unit;
+
+	Unit = GetUnit();
+
+	LocTag = XGParamTag(`XEXPANDCONTEXT.FindTag("XGParam"));
+	LocTag.StrValue0 = Unit.GetName(eNameType_RankFull);
+
+	CallbackData = new class'UICallbackData_StateObjectReference';
+	CallbackData.ObjectRef = Unit.GetReference();
+	DialogData.xUserData = CallbackData;
+	DialogData.fnCallbackEx = PsiPromoteDialogCallback;
+
+	DialogData.eType = eDialog_Alert;
+	DialogData.strTitle = "BECOME PSI OPERATIVE";
+	DialogData.strText = `XEXPAND.ExpandString("<XGParam:StrValue0/!UnitName/> can undergo specialized training to unlock their psionic potential and become a Psi Operative, but they will not be able earn other classes' abilities and use their specialized weapons. This will cost" @ class'WaveCOM_UIPsiTraining'.static.GetNewPsiCost() @ "Do you want to proceed?");
+	DialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+	DialogData.strCancel = class'UIUtilities_Text'.default.m_strGenericNo;
+
+	Movie.Pres.UIRaiseDialog(DialogData);
+}
+
+simulated function PsiPromoteDialogCallback(eUIAction eAction, UICallbackData xUserData)
+{	
+	local XComGameState NewGameState;
+	local XComGameState_HeadquartersXCom XComHQ;
+	local XComGameState_Unit UnitState;
+	local UICallbackData_StateObjectReference CallbackData;
+	local StaffUnitInfo UnitInfo;
+	local ArtifactCost Resources;
+	local StrategyCost DeployCost;
+	local array<StrategyCostScalar> EmptyScalars;
+	local XComGameState_Item InventoryItem;
+	local array<XComGameState_Item> InventoryItems;
+	local XGItem ItemVisualizer;
+
+	CallbackData = UICallbackData_StateObjectReference(xUserData);
+
+	if(eAction == eUIAction_Accept)
+	{	
+		UnitInfo.UnitRef = CallbackData.ObjectRef;
+
+		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Turning rookie into psi operative");
+		XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
+		UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitInfo.UnitRef.ObjectID));
+		
+		UnitState.RankUpSoldier(NewGameState, 'PsiOperative');
+		UnitState.BuySoldierProgressionAbility(NewGameState, `SYNC_RAND(2), `SYNC_RAND(2));
+
+		if (UnitState.GetRank() == 1) // They were just promoted to Initiate
+		{
+			InventoryItems = UnitState.GetAllInventoryItems(NewGameState);
+			foreach InventoryItems(InventoryItem)
+			{
+				XComHQ.PutItemInInventory(NewGameState, InventoryItem);
+				UnitState.RemoveItemFromInventory(InventoryItem, NewGameState);
+				ItemVisualizer = XGItem(`XCOMHISTORY.GetVisualizer(InventoryItem.GetReference().ObjectID));
+				ItemVisualizer.Destroy();
+				`XCOMHISTORY.SetVisualizer(InventoryItem.GetReference().ObjectID, none);
+			}
+			UnitState.ApplySquaddieLoadout(NewGameState, XComHQ);
+			UnitState.ApplyBestGearLoadout(NewGameState); // Make sure the squaddie has the best gear available
+		}
+
+		Resources.ItemTemplateName = 'Supplies';
+		Resources.Quantity = class'WaveCOM_UIPsiTraining'.static.GetNewPsiCost();
+		DeployCost.ResourceCosts.AddItem(Resources);
+		XComHQ.PayStrategyCost(NewGameState, DeployCost, EmptyScalars);
+		NewGameState.AddStateObject(UnitState);
+		NewGameState.AddStateObject(XComHQ);
+
+		`XEVENTMGR.TriggerEvent('PsiTrainingUpdate',,, NewGameState);
+
+		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
+		OnReceiveFocus();
+	}
 }
 
 static function CleanUpStats(XComGameState NewGameState, XComGameState_Unit UnitState)
@@ -347,6 +435,33 @@ static function CleanUpStats(XComGameState NewGameState, XComGameState_Unit Unit
 	UnitState.bUnconscious = false; // Wake up when unconcious state is removed
 }
 
+simulated function OnReceiveFocus()
+{
+	super(UIArmory).OnReceiveFocus();
+	PopulateData();
+	UpdatePromoteItem();
+	Header.PopulateData();
+}
+
+simulated function PopulateData()
+{
+	local XComGameState_Unit Unit;
+	local UIListItemString PsiButton;
+	super.PopulateData();
+
+	// Add Become Psionic Button
+	Unit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
+	PsiButton = Spawn(class'UIListItemString', List.ItemContainer).InitListItem("Become Psionic");
+	if (Unit.GetRank() >= 1 || Unit.CanRankUpSoldier()) // Only rookies can become psionic
+	{
+		if (Unit.IsPsionic())
+			PsiButton.SetDisabled(true, "Already a psionic, use soldier abilities button to learn new abilities.");
+		else
+			PsiButton.SetDisabled(true, "Too late to become psionic");
+	}
+
+}
+
 simulated function InitArmory(StateObjectReference UnitRef, optional name DispEvent, optional name SoldSpawnEvent, optional name NavBackEvent, optional name HideEvent, optional name RemoveEvent, optional bool bInstant = false, optional XComGameState InitCheckGameState)
 {
 	UnitReference = UnitRef;
@@ -359,6 +474,7 @@ simulated function InitArmory(StateObjectReference UnitRef, optional name DispEv
 	List.OnSelectionChanged = OnSelectionChanged;
 
 	PopulateData();
+
 	CheckForCustomizationPopup();
 }
 

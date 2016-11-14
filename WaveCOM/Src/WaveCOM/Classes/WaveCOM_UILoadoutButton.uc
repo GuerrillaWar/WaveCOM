@@ -103,6 +103,7 @@ simulated function InitScreen(UIScreen ScreenParent)
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'UpdateDeployCostDelayed', OnDeath, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'ResearchCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'ItemConstructionCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'PsiTrainingUpdate', UpdateResourceHUD, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'BlackMarketGoodsSold', UpdateResourceHUD, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'BlackMarketPurchase', UpdateResourceHUD, ELD_OnStateSubmitted);
 }
@@ -576,17 +577,7 @@ static function XComGameState_Unit AddStrategyUnitToBoard(XComGameState_Unit Uni
 		}
 	}
 
-	// add abilities
-	// Must happen after items are added, to do ammo merging properly.
 	Rules = `TACTICALRULES;
-	Rules.InitializeUnitAbilities(NewGameState, Unit);
-
-	// make the unit concealed, if they have Phantom
-	// (special-case code, but this is how it works when starting a game normally)
-	if (Unit.FindAbility('Phantom').ObjectID > 0)
-	{
-		Unit.EnterConcealmentNewGameState(NewGameState);
-	}
 
 	// submit it
 	NewGameState.AddStateObject(Unit);
@@ -599,6 +590,17 @@ static function XComGameState_Unit AddStrategyUnitToBoard(XComGameState_Unit Uni
 	NewGameState = History.CreateNewGameState(true, CheatContext);
 	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', Unit.ObjectID));
 	Unit.SetVisibilityLocationFromVector(SpawnLocation);
+	
+	// add abilities
+	// Must happen after items are added, to do ammo merging properly.
+	Rules.InitializeUnitAbilities(NewGameState, Unit);
+
+	// make the unit concealed, if they have Phantom
+	// (special-case code, but this is how it works when starting a game normally)
+	if (Unit.FindAbility('Phantom').ObjectID > 0)
+	{
+		Unit.EnterConcealmentNewGameState(NewGameState);
+	}
 	NewGameState.AddStateObject(Unit);
 
 	`TACTICALRULES.SubmitGameState(NewGameState);
