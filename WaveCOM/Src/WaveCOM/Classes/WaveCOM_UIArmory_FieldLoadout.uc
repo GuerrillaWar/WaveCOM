@@ -49,6 +49,43 @@ simulated function OnAccept()
 	`XSTRATEGYSOUNDMGR.PlaySoundEvent("Play_MenuSelect");
 }
 
+
+simulated function OnSelectionChanged(UIList ContainerList, int ItemIndex)
+{
+	local XComGameState_Unit UnitState;
+	local string Description, CustomizeDesc;
+	
+	// Index order matches order that elements get added in 'PopulateData'
+	switch(ItemIndex)
+	{
+	case 0: // CUSTOMIZE
+		UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
+		CustomizeDesc = UnitState.GetMyTemplate().strCustomizeDesc;
+		Description = CustomizeDesc != "" ? CustomizeDesc : m_strCustomizeSoldierDesc;
+		break;
+	case 1: // LOADOUT
+		Description = m_strLoadoutDesc;
+		break;
+	case 2: // NEUROCHIP IMPLANTS
+		Description = m_strImplantsDesc;
+		break;
+	case 3: // WEAPON UPGRADE
+		Description = m_strCustomizeWeaponDesc;
+		break;
+	case 4: // PROMOTE
+		Description = m_strPromoteDesc;
+		break;
+	case 5: // DISMISS
+		Description = m_strDismissDesc;
+		break;
+	case 6: // Become PSI
+		Description = "Pay" @ class'WaveCOM_UIPsiTraining'.static.GetNewPsiCost() @ "supplies to turn this rookie into a psi operative.";
+		break;
+	}
+
+	MC.ChildSetString("descriptionText", "htmlText", class'UIUtilities_Text'.static.AddFontInfo(Description, bIsIn3D));
+}
+
 function UpdateActiveUnit()
 {
 	UpdateUnit(UnitReference.ObjectID);
@@ -123,6 +160,44 @@ static function MergeAmmoAsNeeded(XComGameState StartState, XComGameState_Unit U
 	}
 }
 
+static function UnRegisterForCosmeticUnitEvents(XComGameState_Item ItemState, StateObjectReference CosmeticUnitRef)
+{
+	local X2EventManager EventManager;
+	local Object ThisObj;
+
+	EventManager = `XEVENTMGR;
+	ThisObj = ItemState;
+	if( CosmeticUnitRef.ObjectID > 0 )
+	{
+		EventManager.UnRegisterFromEvent( ThisObj, 'UnitMoveFinished' );
+		EventManager.UnRegisterFromEvent( ThisObj, 'AbilityActivated' );
+		EventManager.UnRegisterFromEvent( ThisObj, 'UnitDied' );
+		EventManager.UnRegisterFromEvent( ThisObj, 'ItemRecalled' );
+		EventManager.UnRegisterFromEvent( ThisObj, 'ForceItemRecalled' );
+	}
+}
+
+static function RegisterForCosmeticUnitEvents(XComGameState_Item ItemState, StateObjectReference CosmeticUnitRef)
+{
+	local X2EventManager EventManager;
+	local Object ThisObj;
+
+	if( CosmeticUnitRef.ObjectID > 0 )
+	{	
+	//Only items with cosmetic units need to listen for these. If you expand this conditional, make sure you need to as
+	//having too many items respond to these events would be costly.
+	EventManager = `XEVENTMGR;
+	ThisObj = ItemState;	
+
+		EventManager.RegisterForEvent( ThisObj, 'AbilityActivated', ItemState.OnAbilityActivated, ELD_OnStateSubmitted,,); //Move if we're ordered to
+		EventManager.RegisterForEvent( ThisObj, 'UnitDied', ItemState.OnUnitDied, ELD_OnStateSubmitted,,); //Return to owner if target unit dies or play death anim if owner dies
+		EventManager.RegisterForEvent( ThisObj, 'UnitEvacuated', ItemState.OnUnitEvacuated, ELD_OnStateSubmitted,,); //For gremlin, to evacuate with its owner
+		EventManager.RegisterForEvent( ThisObj, 'ItemRecalled', ItemState.OnItemRecalled, ELD_OnStateSubmitted,,); //Return to owner when specifically requested 
+		EventManager.RegisterForEvent( ThisObj, 'ForceItemRecalled', ItemState.OnForceItemRecalled, ELD_OnStateSubmitted,,); //Return to owner when specifically told
+		EventManager.RegisterForEvent( ThisObj, 'UnitIcarusJumped', ItemState.OnUnitIcarusJumped, ELD_OnStateSubmitted, , ); //Return to owner when specifically told
+	}
+}
+
 static function UpdateUnit(int UnitID)
 {
 	local XComGameState NewGameState;
@@ -192,6 +267,17 @@ static function UpdateUnit(int UnitID)
 				ItemState.OwnerStateObject = Unit.GetReference();
 				ItemState.AttachedUnitRef = Unit.GetReference();
 				NewGameState.AddStateObject(ItemState);
+
+				if (Unit.GetMyTemplate().OnCosmeticUnitCreatedFn != None)
+				{
+					CosmeticUnit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', CosmeticUnitRef.ObjectID));
+					Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitID));
+					Unit.GetMyTemplate().OnCosmeticUnitCreatedFn(CosmeticUnit, Unit, ItemState, NewGameState);
+					NewGameState.AddStateObject(Unit);
+				}
+
+				RegisterForCosmeticUnitEvents(ItemState, CosmeticUnitRef);
+
 				`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 			}
 		}
@@ -628,6 +714,7 @@ static function RefillInventory(XComGameState NewGameState, XComGameState_Unit U
 				CosmeticUnit.RemoveUnitFromPlay();
 				NewGameState.AddStateObject(CosmeticUnit);
 				ItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', ItemReference.ObjectID));
+				UnRegisterForCosmeticUnitEvents(ItemState, ItemState.CosmeticUnitRef);
 				ItemState.CosmeticUnitRef = BlankReference;
 				NewGameState.AddStateObject(ItemState);
 			}

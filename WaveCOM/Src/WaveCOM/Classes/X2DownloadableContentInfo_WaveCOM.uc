@@ -8,7 +8,7 @@
 //  Copyright (c) 2016 Firaxis Games, Inc. All rights reserved.
 //---------------------------------------------------------------------------------------
 
-class X2DownloadableContentInfo_WaveCOM extends X2DownloadableContentInfo config(WaveCOM);
+class X2DownloadableContentInfo_WaveCOM extends X2DownloadableContentInfo config(WaveCOM) dependson(X2EventManager);
 
 var const config float WaveCOMResearchSupplyCostRatio;
 var config array<name> NonUpgradeSchematics;
@@ -444,6 +444,9 @@ exec function WaveCOMTransferToNewMission()
 	local array<string> MissionTypes;
 	local WaveCOM_MissionLogic_WaveCOM MissionLogic;
 	local XComGameState NewGameState;
+	local XComMissionLogic_Listener MissionListener;
+
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 
 	MissionLogic = WaveCOM_MissionLogic_WaveCOM(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'WaveCOM_MissionLogic_WaveCOM'));
 	if (MissionLogic != none)
@@ -470,6 +473,22 @@ exec function WaveCOMTransferToNewMission()
 
 	`log("Transfering to new mission...",, 'WaveCOM');
 	PlayerController = XComPlayerController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	`XEVENTMGR.Clear(); // TEST: Clear ALL EVENTS
+
+	`log("XComMissionLogic :: RegisterMissionLogicListener");
+
+	// Re-register MissionLogicListener
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Loading Save Game Mission Logic Loader");
+	MissionListener = XComMissionLogic_Listener(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComMissionLogic_Listener'));
+	if (MissionListener == none)
+		MissionListener = XComMissionLogic_Listener(NewGameState.CreateStateObject(class'XComMissionLogic_Listener'));
+	else
+		MissionListener = XComMissionLogic_Listener(NewGameState.CreateStateObject(class'XComMissionLogic_Listener', MissionListener.ObjectID));
+	NewGameState.AddStateObject(MissionListener);
+	MissionListener.RegisterToListen();
+	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
+
 	PlayerController.TransferToNewMission(MissionType);
 }
 
@@ -505,7 +524,8 @@ exec function DebugMissionLogic()
 static event ModifyTacticalTransferStartState(XComGameState TransferStartState)
 {
 	local WaveCOM_MissionLogic_WaveCOM WaveLogic, MissionLogic;
-	local XComGameState_UITimer UITimer;
+	local XComGameState_BaseObject RemoveState;
+	local XComGameState_LootDrop LootState;
 	local int WaveID;
 	`log("=*=*=*=*=*=*= Tactical Transfer code executed successfully! =*=*=*=*=*=*=",, 'WaveCOM');
 	`log("Start state size" @ TransferStartState.GetNumGameStateObjects(),, 'WaveCOM');
@@ -538,11 +558,16 @@ static event ModifyTacticalTransferStartState(XComGameState TransferStartState)
 			MissionLogic.UnregisterAllObservers();
 		}
 	}
-	UITimer = XComGameState_UITimer(`XCOMHISTORY.GetSingleGameStateObjectForClass(class 'XComGameState_UITimer', true));
-	if (UITimer != none)
+	RemoveState = `XCOMHISTORY.GetSingleGameStateObjectForClass(class 'XComGameState_UITimer', true);
+	if (RemoveState != none)
 	{
 		// We will make a new UI Timer next round
-		TransferStartState.RemoveStateObject(UITimer.ObjectID);
+		TransferStartState.RemoveStateObject(RemoveState.ObjectID);
+	}
+	foreach TransferStartState.IterateByClassType(class'XComGameState_LootDrop', LootState)
+	{
+		// We don't carry loot drops over
+		TransferStartState.RemoveStateObject(LootState.ObjectID);
 	}
 }
 
@@ -626,6 +651,61 @@ exec function DebugAllGameStateTypes()
 	kDialogData.strText $= "Effects:" @ effects $ "\n";
 	kDialogData.strText $= "Loot drps:" @ loot $ "\n";
 	kDialogData.strText $= "Destructibles:" @ destructibles $ "\n";
+
+	kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+
+	`PRES.UIRaiseDialog(kDialogData);
+}
+
+exec function DebugEvents(optional name EventID='', optional string ObjectName="XComGameState_BaseObject", optional int Mode=0)
+{
+	local TDialogueBoxData  kDialogData;
+
+	kDialogData.eType = eDialog_Alert;
+	kDialogData.strTitle = "Tallying events:";
+
+	if (Mode == 0)
+		kDialogData.strText = "Events:" @ `XEVENTMGR.AllEventListenersToString(EventID, ObjectName);
+	else
+		kDialogData.strText = "Debug:" @ `XEVENTMGR.EventManagerDebugString(EventID, ObjectName);
+
+	kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+
+	`PRES.UIRaiseDialog(kDialogData);
+}
+
+exec function DumpEvents()
+{
+	`log(`XEVENTMGR.EventManagerDebugString());
+}
+
+exec function GetObjectIDStatus(int ID)
+{
+	local TDialogueBoxData  kDialogData;
+	local XComGameState_BaseObject StateObject;
+	kDialogData.eType = eDialog_Alert;
+	kDialogData.strTitle = "Tallying events:";
+
+	StateObject = `XCOMHISTORY.GetGameStateForObjectID(ID);
+
+
+
+	if (StateObject == none)
+		kDialogData.strText = ID @ "not found.";
+	else
+	{
+		kDialogData.strText = ID @ "found:";
+		if (StateObject.bInPlay)
+			kDialogData.strText $= "In play. ";
+		else
+			kDialogData.strText $= "Not in play. ";
+		if (StateObject.bRemoved)
+			kDialogData.strText $= "Active. ";
+		else
+			kDialogData.strText $= "Removed. ";
+		kDialogData.strText $= "\n" $ StateObject.ToString();
+		
+	}
 
 	kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
 

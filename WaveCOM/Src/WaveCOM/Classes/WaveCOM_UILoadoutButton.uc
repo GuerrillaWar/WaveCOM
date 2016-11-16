@@ -237,7 +237,6 @@ public function OpenBlackMarket(UIButton Button)
 	local WaveCOM_UIBlackMarket LoadedScreen;
 	local XComGameState NewGameState;
 	local XComGameState_BlackMarket BlackMarket;
-	`log("WaveCOM :: Setting Up State");
 	
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Update Black Market Prices");
 	BlackMarket = XComGameState_BlackMarket(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BlackMarket'));
@@ -482,7 +481,7 @@ private static function XComGameState_Unit ChooseStrategyUnit(XComGameStateHisto
 }
 
 // chooses a location for the unit to spawn in the spawn zone
-private static function bool ChooseSpawnLocation(out Vector SpawnLocation)
+public static function bool ChooseSpawnLocation(out Vector SpawnLocation)
 {
 	local XComParcelManager ParcelManager;
 	local XComGroupSpawn SoldierSpawn;
@@ -525,6 +524,7 @@ static function XComGameState_Unit AddStrategyUnitToBoard(XComGameState_Unit Uni
 	local X2EquipmentTemplate EquipmentTemplate;
 	local XComWorldData WorldData;
 	local XComAISpawnManager SpawnManager;
+	local XComGameState_Unit CosmeticUnit;
 
 	if(Unit == none)
 	{
@@ -572,7 +572,17 @@ static function XComGameState_Unit AddStrategyUnitToBoard(XComGameState_Unit Uni
 			if( EquipmentTemplate != none && EquipmentTemplate.CosmeticUnitTemplate != "" )
 			{
 				SpawnLocation = WorldData.GetPositionFromTileCoordinates(Unit.TileLocation);
-				ItemState.CosmeticUnitRef = SpawnManager.CreateUnit(SpawnLocation, name(EquipmentTemplate.CosmeticUnitTemplate), Unit.GetTeam(), true);
+				ItemState.CosmeticUnitRef = SpawnManager.CreateUnit(SpawnLocation, name(EquipmentTemplate.CosmeticUnitTemplate), Unit.GetTeam(), false,, NewGameState);
+				ItemState.OwnerStateObject = Unit.GetReference();
+				ItemState.AttachedUnitRef = Unit.GetReference();
+
+				if (Unit.GetMyTemplate().OnCosmeticUnitCreatedFn != None)
+				{
+					CosmeticUnit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', ItemState.CosmeticUnitRef.ObjectID));
+					Unit.GetMyTemplate().OnCosmeticUnitCreatedFn(CosmeticUnit, Unit, ItemState, NewGameState);
+				}
+
+				class'WaveCOM_UIArmory_FieldLoadout'.static.RegisterForCosmeticUnitEvents(ItemState, ItemState.CosmeticUnitRef);
 			}
 		}
 	}

@@ -39,64 +39,100 @@ var const config array<WaveEncounter> WaveEncounters;
 
 delegate EventListenerReturn OnEventDelegate(Object EventData, Object EventSource, XComGameState GameState, Name EventID);
 
-function SetupMissionStartState(XComGameState StartState)
+function EventListenerReturn RemoveExcessUnits(Object EventData, Object EventSource, XComGameState GameState, Name EventID)
 {
-	local XComGameState_BlackMarket BlackMarket;
-	local XComGameState_Unit UnitState, LastUnit;
-	local bool IsUnitStuck;
-	local StateObjectReference AbilityReference;
-	local TTile LastTile;
+	local StateObjectReference AbilityReference, ItemReference, BlankReference;
+	local XComGameState_Unit UnitState, CosmeticUnit;
+	local XComGameState_Item ItemState;
+	local XComGameState NewGameState;
+	local TTile NextTile;
+	local Vector NextSpawn;
+	local X2EquipmentTemplate EquipmentTemplate;
+	local Object this;
 
-	`log("WaveCOM :: Setting Up State");
-	
-	BlackMarket = XComGameState_BlackMarket(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BlackMarket'));
-	BlackMarket = XComGameState_BlackMarket(StartState.CreateStateObject(class'XComGameState_BlackMarket', BlackMarket.ObjectID));
-	StartState.AddStateObject(BlackMarket);
-	BlackMarket.ResetBlackMarketGoods(StartState);
+	class'WaveCOM_UILoadoutButton'.static.ChooseSpawnLocation(NextSpawn);
+	NextTile = `XWORLD.GetTileCoordinatesFromPosition(NextSpawn);
 
-	LastTile.Z = 9999;
+	`log(" WaveCOM MissionLogic :: Begin clearing excess units. Coordinates:" @ NextTile.X $ "," $ NextTile.Y $ "," $ NextTile.Z);
+
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Removing Excess Units");
 
 	// Remove excess Units
 	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
 	{
 		if (`XCOMHQ.Squad.Find('ObjectID', UnitState.GetReference().ObjectID) != INDEX_NONE)
 		{
-			if (UnitState.TileLocation == LastTile) // NO valid spawn location for them
+			if (UnitState.TileLocation == NextTile) // If a new tile chosen is occupied, that means any unit on that tile are extras
 			{
-				if (!IsUnitStuck && LastUnit != none)
-				{
-					// The last unit is stuck as well, remove it
-					LastUnit = XComGameState_Unit(StartState.CreateStateObject(class'XComGameState_Unit', LastUnit.ObjectID));
-					`log("Cleaning Abilities");
-					foreach LastUnit.Abilities(AbilityReference)
-					{
-						StartState.RemoveStateObject(AbilityReference.ObjectID);
-					}
-					LastUnit.Abilities.Length = 0;
-					class'WaveCOM_UIArmory_FieldLoadout'.static.CleanUpStats(StartState, LastUnit);
-					LastUnit.RemoveUnitFromPlay();
-					StartState.AddStateObject(LastUnit);
-				}
-				IsUnitStuck = true;
 				`log("Cleaning Abilities");
+				UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
 				foreach UnitState.Abilities(AbilityReference)
 				{
-					StartState.RemoveStateObject(AbilityReference.ObjectID);
+					NewGameState.RemoveStateObject(AbilityReference.ObjectID);
 				}
-				UnitState = XComGameState_Unit(StartState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
 				UnitState.Abilities.Length = 0;
-				class'WaveCOM_UIArmory_FieldLoadout'.static.CleanUpStats(StartState, UnitState);
+
+				foreach UnitState.InventoryItems(ItemReference)
+				{
+					ItemState = XComGameState_Item(`XCOMHISTORY.GetGameStateForObjectID(ItemReference.ObjectID));
+					if( ItemState.OwnerStateObject.ObjectID == UnitState.ObjectID )
+					{
+						EquipmentTemplate = X2EquipmentTemplate(ItemState.GetMyTemplate());
+						if( EquipmentTemplate != none && EquipmentTemplate.CosmeticUnitTemplate != "" && ItemState.CosmeticUnitRef.ObjectID != 0)
+						{
+							`log("Murdering a gremlin");
+							CosmeticUnit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', ItemState.CosmeticUnitRef.ObjectID));
+							CosmeticUnit.RemoveUnitFromPlay();
+							NewGameState.AddStateObject(CosmeticUnit);
+							ItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', ItemReference.ObjectID));
+							class'WaveCOM_UIArmory_FieldLoadout'.static.UnRegisterForCosmeticUnitEvents(ItemState, ItemState.CosmeticUnitRef);
+							ItemState.CosmeticUnitRef = BlankReference;
+							NewGameState.AddStateObject(ItemState);
+						}
+					}
+				}
+				class'WaveCOM_UIArmory_FieldLoadout'.static.CleanUpStats(NewGameState, UnitState);
 				UnitState.RemoveUnitFromPlay();
-				StartState.AddStateObject(UnitState);
+				NewGameState.AddStateObject(UnitState);
 				`XWORLD.ClearTileBlockedByUnitFlag(UnitState);
-				`XEVENTMGR.TriggerEvent('UpdateDeployCostDelayed',,, StartState);
+				`XEVENTMGR.TriggerEvent('UpdateDeployCostDelayed',,, NewGameState);
 			}
-			LastTile = UnitState.TileLocation;
-			LastUnit = UnitState;
 		}
 	}
+	if(NewGameState.GetNumGameStateObjects() > 0)
+	{
+		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	}
+	else
+	{
+		`XCOMHISTORY.CleanupPendingGameState(NewGameState);
+	}
+
+	this = self;
+
+	`XEVENTMGR.UnRegisterFromEvent(this, 'HACK_RemoveExcessSoldiers');
+
+	return ELR_NoInterrupt;
+}
+
+function SetupMissionStartState(XComGameState StartState)
+{
+	local XComGameState_BlackMarket BlackMarket;
+	local Object ThisObj;
+
+	`log("WaveCOM :: Setting Up State - Refresh Black Market and Remove extra units");
+	
+	BlackMarket = XComGameState_BlackMarket(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BlackMarket'));
+	BlackMarket = XComGameState_BlackMarket(StartState.CreateStateObject(class'XComGameState_BlackMarket', BlackMarket.ObjectID));
+	StartState.AddStateObject(BlackMarket);
+	BlackMarket.ResetBlackMarketGoods(StartState);
 
 	UpdateCombatCountdown(StartState);
+
+	ThisObj = self;
+
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'HACK_RemoveExcessSoldiers', RemoveExcessUnits, ELD_OnStateSubmitted,, StartState);
+	`XEVENTMGR.TriggerEvent('HACK_RemoveExcessSoldiers', StartState, StartState, StartState);
 }
 
 function RegisterEventHandlers()
@@ -335,6 +371,7 @@ function CollectLootToHQ()
 				UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
 				UnitState.bBodyRecovered = true;
 				UnitState.RemoveUnitFromPlay(); // must be done in the name of performance
+				UnitState.OnEndTacticalPlay(); // Release all event handlers to improve performance
 				NewGameState.AddStateObject(UnitState);
 				++KillCount;
 
@@ -391,6 +428,7 @@ function CollectLootToHQ()
 				
 				XComHQ.Squad.RemoveItem(UnitState.GetReference()); // Remove from squad
 				UnitState.RemoveUnitFromPlay(); // RIP
+				UnitState.OnEndTacticalPlay(); // Release all event handlers to improve performance
 			}
 		}
 	}
