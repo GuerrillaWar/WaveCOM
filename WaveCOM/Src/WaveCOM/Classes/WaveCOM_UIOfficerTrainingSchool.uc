@@ -5,10 +5,11 @@ function bool OnUnlockOption(int iOption)
 	local bool result;
 	local XComGameState_Unit UnitState;
 	local XComGameState NewGameState;
-	local XComGameState_Effect EffectState;
 	local StateObjectReference AbilityReference;
 	local XComGameState_Player XComPlayer;
 	local XComGameState_BattleData BattleData;
+	local WaveCOMGameStateContext_UpdateUnit EffectContext;
+
 	result = super.OnUnlockOption(iOption);
 
 	if (result)
@@ -29,7 +30,8 @@ function bool OnUnlockOption(int iOption)
 		{
 			if( UnitState.GetTeam() == eTeam_XCom && UnitState.IsAlive() && XComHQ.Squad.Find('ObjectID', UnitState.GetReference().ObjectID) != INDEX_NONE && !UnitState.bRemovedFromPlay)
 			{
-				NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Clean Unit State");
+				EffectContext = class'WaveCOMGameStateContext_UpdateUnit'.static.CreateChangeStateUU("Clean Unit State", UnitState);
+				NewGameState = EffectContext.GetGameState();
 				UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
 				NewGameState.AddStateObject(UnitState);
 				`log("Cleaning and readding Abilities");
@@ -38,15 +40,7 @@ function bool OnUnlockOption(int iOption)
 					NewGameState.RemoveStateObject(AbilityReference.ObjectID);
 				}
 
-				while (UnitState.AppliedEffectNames.Length > 0)
-				{
-					EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AppliedEffects[ 0 ].ObjectID ) );
-					if (EffectState != None)
-					{
-						EffectState.GetX2Effect().UnitEndedTacticalPlay(EffectState, UnitState);
-					}
-					EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
-				}
+				class'WaveCOM_UIArmory_FieldLoadout'.static.CleanUpStats(NewGameState, UnitState, EffectContext);
 
 				`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 			

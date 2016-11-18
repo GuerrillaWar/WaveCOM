@@ -446,8 +446,6 @@ exec function WaveCOMTransferToNewMission()
 	local XComGameState NewGameState;
 	local XComMissionLogic_Listener MissionListener;
 
-	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
-
 	MissionLogic = WaveCOM_MissionLogic_WaveCOM(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'WaveCOM_MissionLogic_WaveCOM'));
 	if (MissionLogic != none)
 	{
@@ -710,4 +708,45 @@ exec function GetObjectIDStatus(int ID)
 	kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
 
 	`PRES.UIRaiseDialog(kDialogData);
+}
+
+exec function ReviveAll()
+{
+	local WaveCOMGameStateContext_UpdateUnit EffectContext;
+	local StateObjectReference AbilityReference, UnitRef;
+	local XComGameState NewGameState;
+	local XGUnit Visualizer;
+	local XComGameState_Unit UnitState;
+	local XComGameState_HeadquartersXCom XComHQ;
+
+	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
+	{
+		if( UnitState.GetTeam() == eTeam_XCom)
+		{
+			EffectContext = class'WaveCOMGameStateContext_UpdateUnit'.static.CreateChangeStateUU("Clean Unit State", UnitState);
+			NewGameState = EffectContext.GetGameState();
+			UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
+			NewGameState.AddStateObject(UnitState);
+			`log("Cleaning and readding Abilities");
+			foreach UnitState.Abilities(AbilityReference)
+			{
+				NewGameState.RemoveStateObject(AbilityReference.ObjectID);
+			}
+			UnitState.Abilities.Length = 0;
+			Visualizer = XGUnit(UnitState.FindOrCreateVisualizer());
+			Visualizer.GetPawn().StopPersistentPawnPerkFX(); // Remove all abilities visualizers
+
+			class'WaveCOM_UIArmory_FieldLoadout'.static.CleanUpStats(NewGameState, UnitState, EffectContext);
+			class'WaveCOM_UIArmory_FieldLoadout'.static.RefillInventory(NewGameState, UnitState);
+
+			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+			
+			XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+			UnitRef = UnitState.GetReference();
+			if (UnitState.IsAlive() && XComHQ.Squad.Find('ObjectID', UnitRef.ObjectID) != INDEX_NONE && !UnitState.bRemovedFromPlay)
+			{
+				class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnit(UnitRef.ObjectID);
+			}
+		}
+	}
 }
