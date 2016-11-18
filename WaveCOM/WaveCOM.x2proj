@@ -35,6 +35,9 @@ Known Issues
     <RootNamespace>WaveCOM</RootNamespace>
     <ProjectGuid>{1523996b-5e41-458e-be0b-9bbdcb153d57}</ProjectGuid>
   </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <OutputPath>bin\Debug\</OutputPath>
+  </PropertyGroup>
   <ItemGroup>
     <Folder Include="Config\" />
     <Folder Include="Content\" />
@@ -49,6 +52,9 @@ Known Issues
     <Content Include="Config\XComContent.ini">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Config\XComGameCore.ini">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Config\XComMissionLogic.ini">
       <SubType>Content</SubType>
     </Content>
@@ -56,6 +62,9 @@ Known Issues
       <SubType>Content</SubType>
     </Content>
     <Content Include="Config\XComWaveCOM.ini">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Localization\WaveCOM.int">
       <SubType>Content</SubType>
     </Content>
     <Content Include="ReadMe.txt" />
@@ -67,7 +76,16 @@ Known Issues
     <Content Include="Src\WaveCOM\Classes\WaveCOMMissionSource.uc">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOMSoldierContinentBonusUnlockTemplate.uc">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOMStrategy.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOMStrategyElement_AcademyUnlocks.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOMXComGameState_BlackMarket.uc">
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_MissionLogic_WaveCOM.uc">
@@ -82,7 +100,16 @@ Known Issues
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UIArmory_Loadout.uc">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UIArmory_Promotion.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UIArmory_WeaponUpgrade.uc">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UIAvengerHUD.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UIBlackMarket.uc">
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UICustomize_Menu.uc">
@@ -98,6 +125,15 @@ Known Issues
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UILoadoutButton.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UIOfficerTrainingSchool.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UIPsiTraining.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UISL_ListenForUnitReward.uc">
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\WaveCOM\Classes\X2DownloadableContentInfo_WaveCOM.uc" />

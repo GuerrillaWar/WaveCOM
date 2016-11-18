@@ -2,6 +2,13 @@
 
 class WaveCOM_UIArmory_Loadout extends UIArmory_Loadout;
 
+simulated function PopulateData()
+{
+	UpdateEquippedList();
+	UpdateLockerList();
+	ChangeActiveList(EquippedList, true);
+}
+
 simulated function bool EquipItem(UIArmory_LoadoutItem Item)
 {
 	local StateObjectReference PrevItemRef, NewItemRef;
@@ -50,7 +57,6 @@ simulated function bool EquipItem(UIArmory_LoadoutItem Item)
 	{
 		Weapon = XGWeapon(PrevItem.GetVisualizer());
 		// Weapon must be graphically detach, otherwise destroying it leaves a NULL component attached at that socket
-		XComUnitPawn(ActorPawn).DetachItem(Weapon.GetEntity().Mesh);
 
 		Weapon.Destroy();
 	}
@@ -116,4 +122,18 @@ simulated function bool EquipItem(UIArmory_LoadoutItem Item)
 	}
 
 	return EquipSucceeded;
+}
+
+simulated function PrevSoldier()
+{
+	// Do not switch soldiers in this screen
+}
+
+simulated function NextSoldier()
+{
+	// Do not switch soldiers in this screen
+}
+
+simulated function LoadSoldierEquipment()
+{
 }

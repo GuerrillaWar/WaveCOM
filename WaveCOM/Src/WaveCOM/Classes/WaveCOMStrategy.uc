@@ -5,14 +5,63 @@ var XComGameState_MissionSite WaveCOMMissionSite;
 
 var const config int WaveCOMStartingSupplies;
 
+function LoadGame()
+{
+	`STRATEGYRULES.StartNewGame();
+	`log("Access state: WaveCOMLoadingGame",, 'WaveCOM');
+	GoToState('WaveCOMLoadingGame');
+}
+
+function TransferFromTactical()
+{
+	`STRATEGYRULES.StartNewGame();
+	GoToState('WaveCOMStartingFromTactical');
+}
+
+state WaveCOMStartingFromTactical
+{
+Begin:		
+	`log("Access state: WaveCOMStartingFromTactical",, 'WaveCOM');
+	`HQPRES.UIEnterStrategyMap();
+	// Movie will have already played so jump to player stats screen
+	`HQPRES.UIYouWin();
+}
+
+state WaveCOMLoadingGame
+{
+Begin:
+	PrepareTacticalBattle(WaveCOMMissionSite.ObjectID);
+	LaunchTacticalBattle(WaveCOMMissionSite.ObjectID);
+}
+
 state Initing
 {
 Begin:
 	
 	while( `HQPRES.IsBusy() )
 		Sleep( 0 );
-	
-	StartWaveCOM();
+	if( `XCOMHISTORY.GetNumGameStates() == 1 )
+	{	
+		// New Game
+		`log("Access state: StartWaveCOM",, 'WaveCOM');
+		StartWaveCOM();
+	}
+	else
+	{
+		// Loaded game, since there are no strategy save the code shouldn't reach here, but if it did, we need to handle things
+		if(m_bLoadedFromSave)
+		{
+			// Somehow we loaded to strategy side. Give us a new WaveCOM mission
+			`log("Access state: LoadGame",, 'WaveCOM');
+			LoadGame();
+		}
+		else
+		{
+			// We probably evac'd. End the Game.
+			`log("Access state: TransferFromTactical",, 'WaveCOM');
+			TransferFromTactical();
+		}
+	}
 }
 
 function StartWaveCOM()
@@ -39,9 +88,24 @@ state StartingWaveCOM
 
 		XComHQ.bDontShowSetupMovies = true;
 		XComHQ.AddResource(NewGameState, 'Supplies', (WaveCOMStartingSupplies - XComHQ.GetSupplies()));
-		XComHQ.AddResource(NewGameState, 'Intel', (1000 - XComHQ.GetIntel()));
+		XComHQ.AddResource(NewGameState, 'Intel', (0 - XComHQ.GetIntel())); // Reset to 0 intel
 		XComHQ.AddResource(NewGameState, 'AlienAlloy', (10000 - XComHQ.GetAlienAlloys()));
 		XComHQ.AddResource(NewGameState, 'EleriumDust', (10000 - XComHQ.GetEleriumDust()));
+
+		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+	}
+
+	function OpenBlackMarket()
+	{
+		local XComGameStateHistory History;
+		local XComGameState NewGameState;
+		local XComGameState_BlackMarket Market;
+
+		History = `XCOMHISTORY;
+		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Open Black Market");
+		Market = XComGameState_BlackMarket(History.GetSingleGameStateObjectForClass(class'XComGameState_BlackMarket'));
+
+		Market.OpenBlackMarket(NewGameState);
 
 		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 	}
@@ -370,6 +434,8 @@ Begin:
 	GiveScientist();
 	InitSoldiers();
 	InitFacilities();
+
+	OpenBlackMarket();
 
 
 	while(`HQPRES.IsBusy())
