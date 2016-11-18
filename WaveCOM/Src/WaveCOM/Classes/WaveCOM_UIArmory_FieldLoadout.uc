@@ -30,21 +30,60 @@ simulated function OnAccept()
 			Push_UIArmory_Implants(UnitReference);
 		break;
 	case 3: // WEAPON UPGRADE
-		// Release pawn so it can get recreated when the screen receives focus
+		// Release pawn so it can get recreated whenI the screen receives focus
 		ReleasePawn();
 		if( XComHQ.bModularWeapons )
 			Push_UIArmory_WeaponUpgrade(UnitReference);
 		break;
 	case 4: // PROMOTE
 		if( GetUnit().GetRank() >= 1 || GetUnit().CanRankUpSoldier() || GetUnit().HasAvailablePerksToAssign() )
-
 			Push_UIArmory_Promotion(UnitReference);
 		break;
 	case 5: // DISMISS
 		OnDismissUnit();
 		break;
+	case 6: // BECOME PSIONIC
+		PsiPromoteDialog();
+		break;
 	}
 	`XSTRATEGYSOUNDMGR.PlaySoundEvent("Play_MenuSelect");
+}
+
+
+simulated function OnSelectionChanged(UIList ContainerList, int ItemIndex)
+{
+	local XComGameState_Unit UnitState;
+	local string Description, CustomizeDesc;
+	
+	// Index order matches order that elements get added in 'PopulateData'
+	switch(ItemIndex)
+	{
+	case 0: // CUSTOMIZE
+		UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
+		CustomizeDesc = UnitState.GetMyTemplate().strCustomizeDesc;
+		Description = CustomizeDesc != "" ? CustomizeDesc : m_strCustomizeSoldierDesc;
+		break;
+	case 1: // LOADOUT
+		Description = m_strLoadoutDesc;
+		break;
+	case 2: // NEUROCHIP IMPLANTS
+		Description = m_strImplantsDesc;
+		break;
+	case 3: // WEAPON UPGRADE
+		Description = m_strCustomizeWeaponDesc;
+		break;
+	case 4: // PROMOTE
+		Description = m_strPromoteDesc;
+		break;
+	case 5: // DISMISS
+		Description = m_strDismissDesc;
+		break;
+	case 6: // Become PSI
+		Description = "Pay" @ class'WaveCOM_UIPsiTraining'.static.GetNewPsiCost() @ "supplies to turn this rookie into a psi operative.";
+		break;
+	}
+
+	MC.ChildSetString("descriptionText", "htmlText", class'UIUtilities_Text'.static.AddFontInfo(Description, bIsIn3D));
 }
 
 function UpdateActiveUnit()
@@ -52,15 +91,46 @@ function UpdateActiveUnit()
 	UpdateUnit(UnitReference.ObjectID);
 }
 
+static function int GetBonusWeaponAmmoFromAbilities(XComGameState_Item ItemState, XComGameState StartState, XComGameState_Unit UnitState)
+{
+	local array<SoldierClassAbilityType> SoldierAbilities;
+	local X2AbilityTemplateManager AbilityTemplateManager;
+	local X2AbilityTemplate AbilityTemplate;
+	local X2CharacterTemplate CharacterTemplate;
+	local int Bonus, Idx;
+
+	//  Note: This function is called prior to abilities being generated for the unit, so we only inspect
+	//          1) the earned soldier abilities
+	//          2) the abilities on the character template
+
+	Bonus = 0;
+	AbilityTemplateManager = class'X2AbilityTemplateManager'.static.GetAbilityTemplateManager();
+	SoldierAbilities = UnitState.GetEarnedSoldierAbilities();
+
+	for (Idx = 0; Idx < SoldierAbilities.Length; ++Idx)
+	{
+		AbilityTemplate = AbilityTemplateManager.FindAbilityTemplate(SoldierAbilities[Idx].AbilityName);
+		if (AbilityTemplate != none && AbilityTemplate.GetBonusWeaponAmmoFn != none)
+			Bonus += AbilityTemplate.GetBonusWeaponAmmoFn(UnitState, ItemState);
+	}
+
+	CharacterTemplate = UnitState.GetMyTemplate();
+	
+	for (Idx = 0; Idx < CharacterTemplate.Abilities.Length; ++Idx)
+	{
+		AbilityTemplate = AbilityTemplateManager.FindAbilityTemplate(CharacterTemplate.Abilities[Idx]);
+		if (AbilityTemplate != none && AbilityTemplate.GetBonusWeaponAmmoFn != none)
+			Bonus += AbilityTemplate.GetBonusWeaponAmmoFn(UnitState, ItemState);
+	}
+
+	return Bonus;
+}
+
 static function MergeAmmoAsNeeded(XComGameState StartState, XComGameState_Unit Unit)
 {
 	local XComGameState_Item ItemIter, ItemInnerIter;
 	local X2WeaponTemplate MergeTemplate;
 	local int Idx, InnerIdx, BonusAmmo;
-	local bool bFieldMedic, bHeavyOrdnance;
-
-	bFieldMedic = Unit.HasSoldierAbility('FieldMedic');
-	bHeavyOrdnance = Unit.HasSoldierAbility('HeavyOrdnance');
 
 	for (Idx = 0; Idx < Unit.InventoryItems.Length; ++Idx)
 	{
@@ -70,12 +140,7 @@ static function MergeAmmoAsNeeded(XComGameState StartState, XComGameState_Unit U
 			MergeTemplate = X2WeaponTemplate(ItemIter.GetMyTemplate());
 			if (MergeTemplate != none && MergeTemplate.bMergeAmmo)
 			{
-				BonusAmmo = 0;
-
-				if (bFieldMedic && ItemIter.GetWeaponCategory() == class'X2Item_DefaultUtilityItems'.default.MedikitCat)
-					BonusAmmo += class'X2Ability_SpecialistAbilitySet'.default.FIELD_MEDIC_BONUS;
-				if (bHeavyOrdnance && ItemIter.InventorySlot == eInvSlot_GrenadePocket)
-					BonusAmmo += class'X2Ability_GrenadierAbilitySet'.default.ORDNANCE_BONUS;
+				BonusAmmo = GetBonusWeaponAmmoFromAbilities(ItemIter, StartState, Unit);
 
 				ItemIter.MergedItemCount = 1;
 				for (InnerIdx = Idx + 1; InnerIdx < Unit.InventoryItems.Length; ++InnerIdx)
@@ -83,10 +148,7 @@ static function MergeAmmoAsNeeded(XComGameState StartState, XComGameState_Unit U
 					ItemInnerIter = XComGameState_Item(StartState.GetGameStateForObjectID(Unit.InventoryItems[InnerIdx].ObjectID));
 					if (ItemInnerIter != none && ItemInnerIter.GetMyTemplate() == MergeTemplate)
 					{
-						if (bFieldMedic && ItemInnerIter.GetWeaponCategory() == class'X2Item_DefaultUtilityItems'.default.MedikitCat)
-							BonusAmmo += class'X2Ability_SpecialistAbilitySet'.default.FIELD_MEDIC_BONUS;
-						if (bHeavyOrdnance && ItemInnerIter.InventorySlot == eInvSlot_GrenadePocket)
-							BonusAmmo += class'X2Ability_GrenadierAbilitySet'.default.ORDNANCE_BONUS;
+						BonusAmmo += GetBonusWeaponAmmoFromAbilities(ItemInnerIter, StartState, Unit);
 						ItemInnerIter.bMergedOut = true;
 						ItemInnerIter.Ammo = 0;
 						ItemIter.MergedItemCount++;
@@ -95,6 +157,44 @@ static function MergeAmmoAsNeeded(XComGameState StartState, XComGameState_Unit U
 				ItemIter.Ammo = ItemIter.GetClipSize() * ItemIter.MergedItemCount + BonusAmmo;
 			}
 		}
+	}
+}
+
+static function UnRegisterForCosmeticUnitEvents(XComGameState_Item ItemState, StateObjectReference CosmeticUnitRef)
+{
+	local X2EventManager EventManager;
+	local Object ThisObj;
+
+	EventManager = `XEVENTMGR;
+	ThisObj = ItemState;
+	if( CosmeticUnitRef.ObjectID > 0 )
+	{
+		EventManager.UnRegisterFromEvent( ThisObj, 'UnitMoveFinished' );
+		EventManager.UnRegisterFromEvent( ThisObj, 'AbilityActivated' );
+		EventManager.UnRegisterFromEvent( ThisObj, 'UnitDied' );
+		EventManager.UnRegisterFromEvent( ThisObj, 'ItemRecalled' );
+		EventManager.UnRegisterFromEvent( ThisObj, 'ForceItemRecalled' );
+	}
+}
+
+static function RegisterForCosmeticUnitEvents(XComGameState_Item ItemState, StateObjectReference CosmeticUnitRef)
+{
+	local X2EventManager EventManager;
+	local Object ThisObj;
+
+	if( CosmeticUnitRef.ObjectID > 0 )
+	{	
+	//Only items with cosmetic units need to listen for these. If you expand this conditional, make sure you need to as
+	//having too many items respond to these events would be costly.
+	EventManager = `XEVENTMGR;
+	ThisObj = ItemState;	
+
+		EventManager.RegisterForEvent( ThisObj, 'AbilityActivated', ItemState.OnAbilityActivated, ELD_OnStateSubmitted,,); //Move if we're ordered to
+		EventManager.RegisterForEvent( ThisObj, 'UnitDied', ItemState.OnUnitDied, ELD_OnStateSubmitted,,); //Return to owner if target unit dies or play death anim if owner dies
+		EventManager.RegisterForEvent( ThisObj, 'UnitEvacuated', ItemState.OnUnitEvacuated, ELD_OnStateSubmitted,,); //For gremlin, to evacuate with its owner
+		EventManager.RegisterForEvent( ThisObj, 'ItemRecalled', ItemState.OnItemRecalled, ELD_OnStateSubmitted,,); //Return to owner when specifically requested 
+		EventManager.RegisterForEvent( ThisObj, 'ForceItemRecalled', ItemState.OnForceItemRecalled, ELD_OnStateSubmitted,,); //Return to owner when specifically told
+		EventManager.RegisterForEvent( ThisObj, 'UnitIcarusJumped', ItemState.OnUnitIcarusJumped, ELD_OnStateSubmitted, , ); //Return to owner when specifically told
 	}
 }
 
@@ -167,6 +267,17 @@ static function UpdateUnit(int UnitID)
 				ItemState.OwnerStateObject = Unit.GetReference();
 				ItemState.AttachedUnitRef = Unit.GetReference();
 				NewGameState.AddStateObject(ItemState);
+
+				if (Unit.GetMyTemplate().OnCosmeticUnitCreatedFn != None)
+				{
+					CosmeticUnit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', CosmeticUnitRef.ObjectID));
+					Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitID));
+					Unit.GetMyTemplate().OnCosmeticUnitCreatedFn(CosmeticUnit, Unit, ItemState, NewGameState);
+					NewGameState.AddStateObject(Unit);
+				}
+
+				RegisterForCosmeticUnitEvents(ItemState, CosmeticUnitRef);
+
 				`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 			}
 		}
@@ -252,8 +363,8 @@ function Push_UIArmory_Implants(StateObjectReference UnitRef)
 
 function Push_UIArmory_WeaponUpgrade(StateObjectReference UnitOrWeaponRef)
 {
-	if(TacHUDScreen.Movie.Stack.IsNotInStack(class'UIArmory_WeaponUpgrade'))
-		UIArmory_WeaponUpgrade(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'UIArmory_WeaponUpgrade', TacHUDScreen))).InitArmory(UnitOrWeaponRef);
+	if(TacHUDScreen.Movie.Stack.IsNotInStack(class'WaveCOM_UIArmory_WeaponUpgrade'))
+		UIArmory_WeaponUpgrade(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'WaveCOM_UIArmory_WeaponUpgrade', TacHUDScreen))).InitArmory(UnitOrWeaponRef);
 }
 
 function Push_UIArmory_Loadout(StateObjectReference UnitRef)
@@ -278,6 +389,7 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 	if (GetUnit().CanRankUpSoldier())
 	{
 		XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom', true));
+		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
 		CleanUpStats(NewGameState, UnitState);
 		UnitState.RankUpSoldier(NewGameState, XComHQ.SelectNextSoldierClass());	
 		if (UnitState.GetRank() == 1)
@@ -285,6 +397,7 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 			InventoryItems = UnitState.GetAllInventoryItems(NewGameState);
 			foreach InventoryItems(InventoryItem)
 			{
+				XComHQ.PutItemInInventory(NewGameState, InventoryItem);
 				UnitState.RemoveItemFromInventory(InventoryItem, NewGameState);
 				ItemVisualizer = XGItem(`XCOMHISTORY.GetVisualizer(InventoryItem.GetReference().ObjectID));
 				ItemVisualizer.Destroy();
@@ -299,11 +412,96 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 
 	if (UnitState.GetSoldierClassTemplateName() == 'PsiOperative')
-		PromotionUI = UIArmory_PromotionPsiOp(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'UIArmory_PromotionPsiOp', TacHUDScreen)));
+		PromotionUI = WaveCOM_UIPsiTraining(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'WaveCOM_UIPsiTraining', TacHUDScreen)));
 	else
-		PromotionUI = UIArmory_Promotion(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'UIArmory_Promotion', TacHUDScreen)));
+		PromotionUI = WaveCOM_UIArmory_Promotion(TacHUDScreen.Movie.Stack.Push(TacHUDScreen.Spawn(class'WaveCOM_UIArmory_Promotion', TacHUDScreen)));
 	
 	PromotionUI.InitPromotion(UnitRef, bInstantTransition);
+}
+
+
+simulated function PsiPromoteDialog()
+{
+	local XGParamTag LocTag;
+	local TDialogueBoxData DialogData;
+	local UICallbackData_StateObjectReference CallbackData;
+	local XComGameState_Unit Unit;
+
+	Unit = GetUnit();
+
+	LocTag = XGParamTag(`XEXPANDCONTEXT.FindTag("XGParam"));
+	LocTag.StrValue0 = Unit.GetName(eNameType_RankFull);
+
+	CallbackData = new class'UICallbackData_StateObjectReference';
+	CallbackData.ObjectRef = Unit.GetReference();
+	DialogData.xUserData = CallbackData;
+	DialogData.fnCallbackEx = PsiPromoteDialogCallback;
+
+	DialogData.eType = eDialog_Alert;
+	DialogData.strTitle = "BECOME PSI OPERATIVE";
+	DialogData.strText = `XEXPAND.ExpandString("<XGParam:StrValue0/!UnitName/> can undergo specialized training to unlock their psionic potential and become a Psi Operative, but they will not be able earn other classes' abilities and use their specialized weapons. This will cost" @ class'WaveCOM_UIPsiTraining'.static.GetNewPsiCost() @ "Do you want to proceed?");
+	DialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+	DialogData.strCancel = class'UIUtilities_Text'.default.m_strGenericNo;
+
+	Movie.Pres.UIRaiseDialog(DialogData);
+}
+
+simulated function PsiPromoteDialogCallback(eUIAction eAction, UICallbackData xUserData)
+{	
+	local XComGameState NewGameState;
+	local XComGameState_HeadquartersXCom XComHQ;
+	local XComGameState_Unit UnitState;
+	local UICallbackData_StateObjectReference CallbackData;
+	local StaffUnitInfo UnitInfo;
+	local ArtifactCost Resources;
+	local StrategyCost DeployCost;
+	local array<StrategyCostScalar> EmptyScalars;
+	local XComGameState_Item InventoryItem;
+	local array<XComGameState_Item> InventoryItems;
+	local XGItem ItemVisualizer;
+
+	CallbackData = UICallbackData_StateObjectReference(xUserData);
+
+	if(eAction == eUIAction_Accept)
+	{	
+		UnitInfo.UnitRef = CallbackData.ObjectRef;
+
+		NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Turning rookie into psi operative");
+		XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
+		UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitInfo.UnitRef.ObjectID));
+		
+		UnitState.RankUpSoldier(NewGameState, 'PsiOperative');
+		UnitState.BuySoldierProgressionAbility(NewGameState, `SYNC_RAND(2), `SYNC_RAND(2));
+
+		if (UnitState.GetRank() == 1) // They were just promoted to Initiate
+		{
+			InventoryItems = UnitState.GetAllInventoryItems(NewGameState);
+			foreach InventoryItems(InventoryItem)
+			{
+				XComHQ.PutItemInInventory(NewGameState, InventoryItem);
+				UnitState.RemoveItemFromInventory(InventoryItem, NewGameState);
+				ItemVisualizer = XGItem(`XCOMHISTORY.GetVisualizer(InventoryItem.GetReference().ObjectID));
+				ItemVisualizer.Destroy();
+				`XCOMHISTORY.SetVisualizer(InventoryItem.GetReference().ObjectID, none);
+			}
+			UnitState.ApplySquaddieLoadout(NewGameState, XComHQ);
+			UnitState.ApplyBestGearLoadout(NewGameState); // Make sure the squaddie has the best gear available
+		}
+
+		Resources.ItemTemplateName = 'Supplies';
+		Resources.Quantity = class'WaveCOM_UIPsiTraining'.static.GetNewPsiCost();
+		DeployCost.ResourceCosts.AddItem(Resources);
+		XComHQ.PayStrategyCost(NewGameState, DeployCost, EmptyScalars);
+		NewGameState.AddStateObject(UnitState);
+		NewGameState.AddStateObject(XComHQ);
+
+		`XEVENTMGR.TriggerEvent('PsiTrainingUpdate',,, NewGameState);
+
+		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+
+		OnReceiveFocus();
+	}
 }
 
 static function CleanUpStats(XComGameState NewGameState, XComGameState_Unit UnitState)
@@ -319,34 +517,63 @@ static function CleanUpStats(XComGameState NewGameState, XComGameState_Unit Unit
 		}
 		EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
 	}
+
+	UnitState.bUnconscious = false; // Wake up when unconcious state is removed
+}
+
+simulated function OnReceiveFocus()
+{
+	super(UIArmory).OnReceiveFocus();
+	PopulateData();
+	UpdatePromoteItem();
+	Header.PopulateData();
+}
+
+simulated function PopulateData()
+{
+	local XComGameState_Unit Unit;
+	local UIListItemString PsiButton;
+	super.PopulateData();
+
+	// Add Become Psionic Button
+	Unit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
+	PsiButton = Spawn(class'UIListItemString', List.ItemContainer).InitListItem("Become Psionic");
+	if (Unit.GetRank() >= 1 || Unit.CanRankUpSoldier()) // Only rookies can become psionic
+	{
+		if (Unit.IsPsionic())
+			PsiButton.SetDisabled(true, "Already a psionic, use soldier abilities button to learn new abilities.");
+		else
+			PsiButton.SetDisabled(true, "Too late to become psionic");
+	}
+
 }
 
 simulated function InitArmory(StateObjectReference UnitRef, optional name DispEvent, optional name SoldSpawnEvent, optional name NavBackEvent, optional name HideEvent, optional name RemoveEvent, optional bool bInstant = false, optional XComGameState InitCheckGameState)
 {
 	UnitReference = UnitRef;
-	ResetUnitState();
-	super.InitArmory(UnitRef, DispEvent, SoldSpawnEvent, NavBackEvent, HideEvent, RemoveEvent, bInstant, InitCheckGameState);
+	ResetUnitState();	
+	bUseNavHelp = class'XComGameState_HeadquartersXCom'.static.IsObjectiveCompleted('T0_M2_WelcomeToArmory');
+	super(UIArmory).InitArmory(UnitRef, DispEvent, SoldSpawnEvent, NavBackEvent, HideEvent, RemoveEvent, bInstant, InitCheckGameState);
+
+	List = Spawn(class'UIList', self).InitList('armoryMenuList');
+	List.OnItemClicked = OnItemClicked;
+	List.OnSelectionChanged = OnSelectionChanged;
+
+	PopulateData();
+
+	CheckForCustomizationPopup();
 }
 
-simulated function ResetUnitState()
+static function RefillInventory(XComGameState NewGameState, XComGameState_Unit Unit)
 {
-	local XComGameState_Unit Unit, CosmeticUnit;
-	local XComGameState_Item ItemState, NewItemState, NewBaseItemState, BaseItem;
-	local XComGameState NewGameState;
 	local array<name> UtilityItemTypes;
 	local name ItemTemplateName;
 	local StateObjectReference ItemReference, BlankReference;
 	local array<XComGameState_Item> UtilityItems, GrenadeItems, MergableItems;
 	local X2EquipmentTemplate EquipmentTemplate;
 	local int BaseAmmo; 
-	local object ThisObj;
-
-	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh unit consumables");
-
-	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitReference.ObjectID));
-	NewGameState.AddStateObject(Unit);
-
-	CleanUpStats(NewGameState, Unit);
+	local XComGameState_Item ItemState, NewItemState, NewBaseItemState, BaseItem;
+	local XComGameState_Unit CosmeticUnit;
 
 	UtilityItems = Unit.GetAllItemsInSlot(eInvSlot_Utility);
 	GrenadeItems = Unit.GetAllItemsInSlot(eInvSlot_GrenadePocket);
@@ -354,6 +581,12 @@ simulated function ResetUnitState()
 	`log("=====Initializing refillable items=====",, 'Refill items');
 
 	// Combine utility slots and grenade slots
+	foreach GrenadeItems(ItemState)
+	{
+		UtilityItems.AddItem(ItemState);
+	}
+	// For hunter's axe
+	GrenadeItems = Unit.GetAllItemsInSlot(eInvSlot_TertiaryWeapon);
 	foreach GrenadeItems(ItemState)
 	{
 		UtilityItems.AddItem(ItemState);
@@ -481,6 +714,7 @@ simulated function ResetUnitState()
 				CosmeticUnit.RemoveUnitFromPlay();
 				NewGameState.AddStateObject(CosmeticUnit);
 				ItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', ItemReference.ObjectID));
+				UnRegisterForCosmeticUnitEvents(ItemState, ItemState.CosmeticUnitRef);
 				ItemState.CosmeticUnitRef = BlankReference;
 				NewGameState.AddStateObject(ItemState);
 			}
@@ -489,7 +723,26 @@ simulated function ResetUnitState()
 	
 	
 	Unit.ValidateLoadout(NewGameState);
-	Unit.SetUnitFloatValue('FreeReload', 0, eCleanup_BeginTactical);
+}
+
+simulated function ResetUnitState()
+{
+	local XComGameState_Unit Unit;
+	local XComGameState NewGameState;
+	local object ThisObj;
+
+	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh unit consumables");
+
+	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitReference.ObjectID));
+	NewGameState.AddStateObject(Unit);
+
+	CleanUpStats(NewGameState, Unit);
+
+	// Remerge Inventory
+	RefillInventory(NewGameState, Unit);
+
+	// Every new wave should act as if it's a new mission
+	Unit.CleanupUnitValues(eCleanup_BeginTactical);
 	
 	ThisObj = self;
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'HACK_OnGameStateSubmittedFieldLoadout', OnGameStateSubmitted, ELD_OnStateSubmitted);

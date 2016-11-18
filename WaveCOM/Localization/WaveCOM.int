@@ -1,0 +1,15 @@
+[WaveCOM_QuidUnlock WaveCOMSoldierContinentBonusUnlockTemplate]
+DisplayName="Quid Pro Quo"
+Summary="Black Market items cost 33% less Intel."
+
+[WaveCOM_LockNLoadUnlock WaveCOMSoldierContinentBonusUnlockTemplate]
+DisplayName="Lock and Load"
+Summary="Personal Combat Sims and Weapon Upgrades may be reused."
+
+[WaveCOM_SparePartsUnlock WaveCOMSoldierContinentBonusUnlockTemplate]
+DisplayName="Spare Parts"
+Summary="All Proving Ground project costs reduced by 50% (Rounded up)"
+
+[WaveCOM_ArmedToTeethUnlock WaveCOMSoldierContinentBonusUnlockTemplate]
+DisplayName="Armed to the Teeth"
+Summary="All primary weapons gain an additional upgrade slot."

@@ -17,17 +17,21 @@ static event OnPostTemplatesCreated()
 
 static event OnLoadedSavedGame()
 {	
+}
+
+static function RegisterMissionLogicListener()
+{
 	local XComMissionLogic_Listener MissionListener;
 	local XComGameState NewGameState;
 
+	`log("XComMissionLogic :: RegisterMissionLogicListener");
+
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Loading Save Game Mission Logic Loader");
 	MissionListener = XComMissionLogic_Listener(NewGameState.CreateStateObject(class'XComMissionLogic_Listener'));
-	MissionListener.RegisterToListen();
 	NewGameState.AddStateObject(MissionListener);
 	MissionListener.RegisterToListen();
 
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
-	`log("XComMissionLogic :: OnLoadedSavedGame");
 }
 
 static event InstallNewCampaign(XComGameState StartState)
