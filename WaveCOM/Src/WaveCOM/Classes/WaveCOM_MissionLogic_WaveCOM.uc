@@ -49,13 +49,13 @@ function EventListenerReturn RemoveExcessUnits(Object EventData, Object EventSou
 	local Vector NextSpawn;
 	local X2EquipmentTemplate EquipmentTemplate;
 	local Object this;
+	local XGUnit Visualizer;
+	local WaveCOMGameStateContext_UpdateUnit EffectContext;
 
 	class'WaveCOM_UILoadoutButton'.static.ChooseSpawnLocation(NextSpawn);
 	NextTile = `XWORLD.GetTileCoordinatesFromPosition(NextSpawn);
 
 	`log(" WaveCOM MissionLogic :: Begin clearing excess units. Coordinates:" @ NextTile.X $ "," $ NextTile.Y $ "," $ NextTile.Z);
-
-	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Removing Excess Units");
 
 	// Remove excess Units
 	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
@@ -64,6 +64,9 @@ function EventListenerReturn RemoveExcessUnits(Object EventData, Object EventSou
 		{
 			if (UnitState.TileLocation == NextTile) // If a new tile chosen is occupied, that means any unit on that tile are extras
 			{
+				EffectContext = class'WaveCOMGameStateContext_UpdateUnit'.static.CreateChangeStateUU("Removing Excess Units", UnitState);
+				NewGameState = EffectContext.GetGameState();
+
 				`log("Cleaning Abilities");
 				UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
 				foreach UnitState.Abilities(AbilityReference)
@@ -71,6 +74,8 @@ function EventListenerReturn RemoveExcessUnits(Object EventData, Object EventSou
 					NewGameState.RemoveStateObject(AbilityReference.ObjectID);
 				}
 				UnitState.Abilities.Length = 0;
+				Visualizer = XGUnit(UnitState.FindOrCreateVisualizer());
+				Visualizer.GetPawn().StopPersistentPawnPerkFX(); // Remove all abilities visualizers
 
 				foreach UnitState.InventoryItems(ItemReference)
 				{
@@ -91,21 +96,22 @@ function EventListenerReturn RemoveExcessUnits(Object EventData, Object EventSou
 						}
 					}
 				}
-				class'WaveCOM_UIArmory_FieldLoadout'.static.CleanUpStats(NewGameState, UnitState);
+				class'WaveCOM_UIArmory_FieldLoadout'.static.CleanUpStats(NewGameState, UnitState, EffectContext);
 				UnitState.RemoveUnitFromPlay();
 				NewGameState.AddStateObject(UnitState);
 				`XWORLD.ClearTileBlockedByUnitFlag(UnitState);
 				`XEVENTMGR.TriggerEvent('UpdateDeployCostDelayed',,, NewGameState);
+
+				if(NewGameState.GetNumGameStateObjects() > 0)
+				{
+					`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+				}
+				else
+				{
+					`XCOMHISTORY.CleanupPendingGameState(NewGameState);
+				}
 			}
 		}
-	}
-	if(NewGameState.GetNumGameStateObjects() > 0)
-	{
-		`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
-	}
-	else
-	{
-		`XCOMHISTORY.CleanupPendingGameState(NewGameState);
 	}
 
 	this = self;
@@ -330,7 +336,6 @@ function CollectLootToHQ()
 {
 	local XComGameStateHistory History;
 	local XComGameState NewGameState;
-	local XComGameState_Effect EffectState;
 	local XComGameState_BattleData BattleData;
 	local XComGameState_HeadquartersXCom XComHQ;
 	local float FloatingIntel;
@@ -341,6 +346,8 @@ function CollectLootToHQ()
 	local array<XComGameState_Item> ItemStates;
 	local X2ItemTemplate ItemTemplate;
 	local XComGameState_Unit UnitState;
+	local WaveCOMGameStateContext_UpdateUnit EffectContext;
+	local XGUnit Visualizer;
 
 	local LootResults PendingAutoLoot;
 	local Name LootTemplateName;
@@ -475,7 +482,8 @@ function CollectLootToHQ()
 	{
 		if( UnitState.GetTeam() == eTeam_XCom)
 		{
-			NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Clean Unit State");
+			EffectContext = class'WaveCOMGameStateContext_UpdateUnit'.static.CreateChangeStateUU("Clean Unit State", UnitState);
+			NewGameState = EffectContext.GetGameState();
 			UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
 			NewGameState.AddStateObject(UnitState);
 			`log("Cleaning and readding Abilities");
@@ -483,17 +491,11 @@ function CollectLootToHQ()
 			{
 				NewGameState.RemoveStateObject(AbilityReference.ObjectID);
 			}
+			UnitState.Abilities.Length = 0;
+			Visualizer = XGUnit(UnitState.FindOrCreateVisualizer());
+			Visualizer.GetPawn().StopPersistentPawnPerkFX(); // Remove all abilities visualizers
 
-			while (UnitState.AppliedEffectNames.Length > 0)
-			{
-				EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AppliedEffects[ 0 ].ObjectID ) );
-				if (EffectState != None)
-				{
-					EffectState.GetX2Effect().UnitEndedTacticalPlay(EffectState, UnitState);
-				}
-				EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
-			}
-
+			class'WaveCOM_UIArmory_FieldLoadout'.static.CleanUpStats(NewGameState, UnitState, EffectContext);
 			class'WaveCOM_UIArmory_FieldLoadout'.static.RefillInventory(NewGameState, UnitState);
 
 			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);

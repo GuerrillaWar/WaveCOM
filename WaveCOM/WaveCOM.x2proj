@@ -73,6 +73,9 @@ Known Issues
     <Content Include="Config\XComEngine.ini" />
     <Content Include="Config\XComGame.ini" />
     <Content Include="Localization\XComGame.int" />
+    <Content Include="Src\WaveCOM\Classes\WaveCOMGameStateContext_UpdateUnit.uc">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Src\WaveCOM\Classes\WaveCOMMissionSource.uc">
       <SubType>Content</SubType>
     </Content>

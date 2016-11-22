@@ -221,6 +221,8 @@ static function UpdateUnit(int UnitID)
 		NewGameState.RemoveStateObject(AbilityReference.ObjectID);
 	}
 	Unit.Abilities.Length = 0;
+	Visualizer = XGUnit(Unit.FindOrCreateVisualizer());
+	Visualizer.GetPawn().StopPersistentPawnPerkFX(); // Remove all abilities visualizers
 
 	`log("Reintroducing Inventory");
 	foreach Unit.InventoryItems(ItemReference)
@@ -246,7 +248,7 @@ static function UpdateUnit(int UnitID)
 
 	foreach Unit.InventoryItems(ItemReference)
 	{
-		ItemState = XComGameState_Item(NewGameState.GetGameStateForObjectID(ItemReference.ObjectID));
+		ItemState = XComGameState_Item(`XCOMHISTORY.GetGameStateForObjectID(ItemReference.ObjectID));
 		if( ItemState.OwnerStateObject.ObjectID == Unit.ObjectID )
 		{
 			EquipmentTemplate = X2EquipmentTemplate(ItemState.GetMyTemplate());
@@ -306,6 +308,7 @@ static function UpdateUnitState(int UnitID, XComGameState NewGameState)
 {
 	local XComGameState_Unit Unit;
 	local StateObjectReference AbilityReference;
+	local XGUnit Visualizer;
 
 	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitID));
 
@@ -315,6 +318,8 @@ static function UpdateUnitState(int UnitID, XComGameState NewGameState)
 		NewGameState.RemoveStateObject(AbilityReference.ObjectID);
 	}
 	Unit.Abilities.Length = 0;
+	Visualizer = XGUnit(Unit.FindOrCreateVisualizer());
+	Visualizer.GetPawn().StopPersistentPawnPerkFX(); // Remove all abilities visualizers
 
 	CleanUpStats(NewGameState, Unit);
 
@@ -381,16 +386,19 @@ function Push_UIArmory_Promotion(StateObjectReference UnitRef, optional bool bIn
 	local XComGameState_Item InventoryItem;
 	local array<XComGameState_Item> InventoryItems;
 	local XGItem ItemVisualizer;
+	local WaveCOMGameStateContext_UpdateUnit EffectContext;
 
 	local XComGameState NewGameState;
-	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("RankUp");
+	UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitRef.ObjectID));
+	EffectContext = class'WaveCOMGameStateContext_UpdateUnit'.static.CreateChangeStateUU("RankUp", UnitState);
+	NewGameState = EffectContext.GetGameState();
 	UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitRef.ObjectID));
 
 	if (GetUnit().CanRankUpSoldier())
 	{
 		XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom', true));
 		XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
-		CleanUpStats(NewGameState, UnitState);
+		CleanUpStats(NewGameState, UnitState, EffectContext);
 		UnitState.RankUpSoldier(NewGameState, XComHQ.SelectNextSoldierClass());	
 		if (UnitState.GetRank() == 1)
 		{
@@ -504,7 +512,8 @@ simulated function PsiPromoteDialogCallback(eUIAction eAction, UICallbackData xU
 	}
 }
 
-static function CleanUpStats(XComGameState NewGameState, XComGameState_Unit UnitState)
+// Context is optional, but not providing it will stop visualizations from executing, causing bugs on some effects removal
+static function CleanUpStats(XComGameState NewGameState, XComGameState_Unit UnitState, optional WaveCOMGameStateContext_UpdateUnit Context)
 {
 	local XComGameState_Effect EffectState;
 
@@ -513,12 +522,26 @@ static function CleanUpStats(XComGameState NewGameState, XComGameState_Unit Unit
 		EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AppliedEffects[ 0 ].ObjectID ) );
 		if (EffectState != None)
 		{
-			EffectState.GetX2Effect().UnitEndedTacticalPlay(EffectState, UnitState);
+			EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
+				if (Context != none && Context.RemovedEffects.Find('ObjectID', UnitState.AppliedEffects[ 0 ].ObjectID) == INDEX_NONE)
+					Context.AddEffectRemoved(EffectState);
 		}
-		EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
 	}
-
-	UnitState.bUnconscious = false; // Wake up when unconcious state is removed
+	
+	if (Context != none)
+	{
+		while ( UnitState.AffectedByEffectNames.Length > 0)
+		{
+			EffectState = XComGameState_Effect( `XCOMHISTORY.GetGameStateForObjectID( UnitState.AffectedByEffects[ 0 ].ObjectID ) );
+			if (EffectState != None)
+			{
+				EffectState.RemoveEffect(NewGameState, NewGameState, true); //Cleansed
+				if (Context != none && Context.RemovedEffects.Find('ObjectID', UnitState.AffectedByEffects[ 0 ].ObjectID) == INDEX_NONE)
+					Context.AddEffectRemoved(EffectState);
+			}
+		}
+		`log (" WaveCOM FIeldloadout :: Removed effect states in context:" @ Context.RemovedEffects.Length);
+	}
 }
 
 simulated function OnReceiveFocus()
@@ -730,13 +753,16 @@ simulated function ResetUnitState()
 	local XComGameState_Unit Unit;
 	local XComGameState NewGameState;
 	local object ThisObj;
-
-	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh unit consumables");
+	local WaveCOMGameStateContext_UpdateUnit EffectContext;
+	
+	Unit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
+	EffectContext = class'WaveCOMGameStateContext_UpdateUnit'.static.CreateChangeStateUU("Refresh unit consumables", Unit);
+	NewGameState = EffectContext.GetGameState();
 
 	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitReference.ObjectID));
 	NewGameState.AddStateObject(Unit);
 
-	CleanUpStats(NewGameState, Unit);
+	CleanUpStats(NewGameState, Unit, EffectContext);
 
 	// Remerge Inventory
 	RefillInventory(NewGameState, Unit);
