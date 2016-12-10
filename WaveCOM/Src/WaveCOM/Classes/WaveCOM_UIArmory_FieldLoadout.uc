@@ -434,22 +434,36 @@ simulated function PsiPromoteDialog()
 	local TDialogueBoxData DialogData;
 	local UICallbackData_StateObjectReference CallbackData;
 	local XComGameState_Unit Unit;
+	local XComGameState_HeadquartersXCom XComHQ;
+	local int SupplyCost;
 
 	Unit = GetUnit();
+	XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+	SupplyCost = class'WaveCOM_UIPsiTraining'.static.GetNewPsiCost();
 
-	LocTag = XGParamTag(`XEXPANDCONTEXT.FindTag("XGParam"));
-	LocTag.StrValue0 = Unit.GetName(eNameType_RankFull);
+	if (XComHQ.GetSupplies() < SupplyCost)
+	{
+		DialogData.eType = eDialog_Alert;
+		DialogData.strTitle = "Not enough supplies";
+		DialogData.strText = "Need" @ SupplyCost @ "supplies to train psionic.";
+		DialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+	}
+	else
+	{
+		LocTag = XGParamTag(`XEXPANDCONTEXT.FindTag("XGParam"));
+		LocTag.StrValue0 = Unit.GetName(eNameType_RankFull);
 
-	CallbackData = new class'UICallbackData_StateObjectReference';
-	CallbackData.ObjectRef = Unit.GetReference();
-	DialogData.xUserData = CallbackData;
-	DialogData.fnCallbackEx = PsiPromoteDialogCallback;
+		CallbackData = new class'UICallbackData_StateObjectReference';
+		CallbackData.ObjectRef = Unit.GetReference();
+		DialogData.xUserData = CallbackData;
+		DialogData.fnCallbackEx = PsiPromoteDialogCallback;
 
-	DialogData.eType = eDialog_Alert;
-	DialogData.strTitle = "BECOME PSI OPERATIVE";
-	DialogData.strText = `XEXPAND.ExpandString("<XGParam:StrValue0/!UnitName/> can undergo specialized training to unlock their psionic potential and become a Psi Operative, but they will not be able earn other classes' abilities and use their specialized weapons. This will cost" @ class'WaveCOM_UIPsiTraining'.static.GetNewPsiCost() @ "Do you want to proceed?");
-	DialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
-	DialogData.strCancel = class'UIUtilities_Text'.default.m_strGenericNo;
+		DialogData.eType = eDialog_Alert;
+		DialogData.strTitle = "BECOME PSI OPERATIVE";
+		DialogData.strText = `XEXPAND.ExpandString("<XGParam:StrValue0/!UnitName/> can undergo specialized training to unlock their psionic potential and become a Psi Operative, but they will not be able earn other classes' abilities and use their specialized weapons. This will cost" @ SupplyCost @ "Do you want to proceed?");
+		DialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+		DialogData.strCancel = class'UIUtilities_Text'.default.m_strGenericNo;
+	}
 
 	Movie.Pres.UIRaiseDialog(DialogData);
 }
@@ -556,17 +570,23 @@ simulated function PopulateData()
 {
 	local XComGameState_Unit Unit;
 	local UIListItemString PsiButton;
+	local XComGameState_HeadquartersXCom XComHQ;
 	super.PopulateData();
 
-	// Add Become Psionic Button
-	Unit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
-	PsiButton = Spawn(class'UIListItemString', List.ItemContainer).InitListItem("Become Psionic");
-	if (Unit.GetRank() >= 1 || Unit.CanRankUpSoldier()) // Only rookies can become psionic
-	{
-		if (Unit.IsPsionic())
-			PsiButton.SetDisabled(true, "Already a psionic, use soldier abilities button to learn new abilities.");
-		else
-			PsiButton.SetDisabled(true, "Too late to become psionic");
+	// Check for Psi tech. If not reseasrched remove button
+	XComHQ = class'UIUtilities_Strategy'.static.GetXComHQ();
+	if (XComHQ.IsTechResearched('Psionics')) {
+
+		// Add Become Psionic Button
+		Unit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitReference.ObjectID));
+		PsiButton = Spawn(class'UIListItemString', List.ItemContainer).InitListItem("Become Psionic");
+		if (Unit.GetRank() >= 1 || Unit.CanRankUpSoldier()) // Only rookies can become psionic
+		{
+			if (Unit.IsPsionic())
+				PsiButton.SetDisabled(true, "Already a psionic, use soldier abilities button to learn new abilities.");
+			else
+				PsiButton.SetDisabled(true, "Too late to become psionic");
+		}
 	}
 
 }
