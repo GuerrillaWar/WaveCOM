@@ -33,6 +33,7 @@ static event OnPostTemplatesCreated()
 	PatchOutUselessOTS();
 	MakeEleriumAlloyUnsellable();
 	AddContinentsToOTS();
+	PatchBlackMarketSoldierReward();
 }
 
 static function MakeEleriumAlloyUnsellable()
@@ -95,6 +96,59 @@ static function AddContinentsToOTS()
 			FacilityTemplate.SoldierUnlockTemplates.AddItem('WaveCOM_ArmedToTeethUnlock');
 		}
 	}
+}
+
+static function PatchBlackMarketSoldierReward()
+{
+	local X2RewardTemplate RewardTemplate;
+	RewardTemplate = X2RewardTemplate(class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager().FindStrategyElementTemplate('Reward_Soldier'));
+	RewardTemplate.GiveRewardFn = GivePersonnelReward;
+}
+
+function GivePersonnelReward(XComGameState NewGameState, XComGameState_Reward RewardState, optional StateObjectReference AuxRef, optional bool bOrder = false, optional int OrderHours = -1)
+{
+	local XComGameState_HeadquartersXCom XComHQ;
+	local XComGameStateHistory History;	
+	local XComGameState_Unit UnitState;
+
+	local TDialogueBoxData  kDialogData;
+
+	History = `XCOMHISTORY;	
+
+	XComHQ = XComGameState_HeadquartersXCom(History.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+	XComHQ = XComGameState_HeadquartersXCom(NewGameState.CreateStateObject(class'XComGameState_HeadquartersXCom', XComHQ.ObjectID));
+	NewGameState.AddStateObject(XComHQ);	
+
+	UnitState = XComGameState_Unit(NewGameState.GetGameStateForObjectID(RewardState.RewardObjectReference.ObjectID));
+	if(UnitState == none)
+	{
+		UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', RewardState.RewardObjectReference.ObjectID));
+		NewGameState.AddStateObject(UnitState);
+	}
+		
+	`assert(UnitState != none);
+
+	if(UnitState.GetMyTemplate().bIsSoldier)
+	{
+		UnitState.ApplyBestGearLoadout(NewGameState);
+	}
+
+	XComHQ.AddToCrew(NewGameState, UnitState);
+
+	NewGameState.AddStateObject(UnitState);
+
+	XComHQ.Squad.AddItem(UnitState.GetReference());
+	NewGameState.AddStateObject(XComHQ);
+
+	kDialogData.eType = eDialog_Alert;
+	kDialogData.strTitle = "Purchased black market unit";
+	kDialogData.strText = "Click the deploy soldier button to spawn the purchased unit";
+
+	kDialogData.strAccept = class'UIUtilities_Text'.default.m_strGenericYes;
+
+	`PRES.UIRaiseDialog(kDialogData);
+
+	`XEVENTMGR.TriggerEvent('UpdateDeployCost');
 }
 
 /// <summary>
@@ -180,9 +234,9 @@ static function UpdateResearchTemplates ()
 
 	foreach Techs(TechTemplate)
 	{
+		Tech = X2TechTemplate(TechTemplate);
 		if (Tech.PointsToComplete > 0)
 		{
-			Tech = X2TechTemplate(TechTemplate);
 			BasePoints = Tech.PointsToComplete;
 			AddSupplyCost(Tech.Cost.ResourceCosts, Round(BasePoints * default.WaveCOMResearchSupplyCostRatio));
 			Tech.bJumpToLabs = false;
@@ -280,6 +334,7 @@ static function UpgradeItems(XComGameState NewGameState, XComGameState_Item Item
 	local X2ItemTemplate BaseItemTemplate, UpgradeItemTemplate;
 	local X2WeaponUpgradeTemplate WeaponUpgradeTemplate;
 	local XComGameState_Item InventoryItemState, BaseItemState, UpgradedItemState;
+	local XComGameState_Unit CosmeticUnit;
 	local array<X2ItemTemplate> CreatedItems, ItemsToUpgrade;
 	local array<X2WeaponUpgradeTemplate> WeaponUpgrades;
 	local array<XComGameState_Item> InventoryItems;
@@ -412,26 +467,37 @@ static function UpgradeItems(XComGameState NewGameState, XComGameState_Item Item
 						{
 							UpgradedItemState.ApplyWeaponUpgradeTemplate(WeaponUpgradeTemplate);
 						}
+						
+						if( InventoryItemState.CosmeticUnitRef.ObjectID > 0 )
+						{
+							CosmeticUnit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', InventoryItemState.CosmeticUnitRef.ObjectID));;
+							CosmeticUnit.RemoveUnitFromPlay();
+							class'WaveCOM_UIArmory_FieldLoadout'.static.UnRegisterForCosmeticUnitEvents(InventoryItemState, InventoryItemState.CosmeticUnitRef);
+							NewGameState.AddStateObject(CosmeticUnit);
+						}
 
 						// Delete the old item
 						NewGameState.RemoveStateObject(InventoryItemState.GetReference().ObjectID);
 
 						// Then add the new item to the soldier in the same slot
 						Soldiers[iSoldier].AddItemToInventory(UpgradedItemState, InventorySlot, NewGameState);
-						UnitRef = Soldiers[iSoldier].GetReference();
-						if (Soldiers[iSoldier].IsAlive() && XComHQ.Squad.Find('ObjectID', UnitRef.ObjectID) != INDEX_NONE && !Soldiers[iSoldier].bRemovedFromPlay)
-						{
-							Visualizer = XGUnit(Soldiers[iSoldier].FindOrCreateVisualizer());
-							Soldiers[iSoldier].SyncVisualizer(NewGameState);
-							Visualizer.ApplyLoadoutFromGameState(Soldiers[iSoldier], NewGameState);
-							class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnitState(Soldiers[iSoldier].ObjectID, NewGameState);
-						}
 					}
 				}
 			}
+			
+			//UnitRef = Soldiers[iSoldier].GetReference();
+			//if (Soldiers[iSoldier].IsAlive() && XComHQ.Squad.Find('ObjectID', UnitRef.ObjectID) != INDEX_NONE && !Soldiers[iSoldier].bRemovedFromPlay)
+			//{
+				//Visualizer = XGUnit(Soldiers[iSoldier].FindOrCreateVisualizer());
+				//Soldiers[iSoldier].SyncVisualizer(NewGameState);
+				//Visualizer.ApplyLoadoutFromGameState(Soldiers[iSoldier], NewGameState);
+				//class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnitState(Soldiers[iSoldier].ObjectID, NewGameState);
+			//}
 		}
 
 		// Remove narratives to prevent problems
+		
+		`XEVENTMGR.TriggerEvent('RequestRefreshAllUnits', , , NewGameState);
 	}
 }
 
@@ -513,7 +579,7 @@ exec function RefreshOTS()
 	`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 }
 
-exec function WaveCOMTransferToNewMission()
+static function StaticWaveCOMMissionTransfer()
 {
 	local XComPlayerController PlayerController;
 	local string MissionType;
@@ -544,7 +610,7 @@ exec function WaveCOMTransferToNewMission()
 			MissionTypes.AddItem(MissionDef.sType);
 	}
 	
-	MissionType = MissionTypes[`SYNC_RAND(MissionTypes.Length)];
+	MissionType = MissionTypes[class'Engine'.static.GetEngine().SyncRand(MissionTypes.Length, "WaveCOMTransferMissionRoll")];
 
 	`log("Transfering to new mission...",, 'WaveCOM');
 	PlayerController = XComPlayerController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
@@ -565,6 +631,11 @@ exec function WaveCOMTransferToNewMission()
 
 
 	PlayerController.TransferToNewMission(MissionType);
+}
+
+exec function WaveCOMTransferToNewMission()
+{
+	StaticWaveCOMMissionTransfer();
 }
 
 exec function DebugMissionLogic()

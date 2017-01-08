@@ -139,6 +139,9 @@ Known Issues
     <Content Include="Src\WaveCOM\Classes\WaveCOM_UISL_ListenForUnitReward.uc">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Src\WaveCOM\Classes\WaveCOM_UISL_PauseMenuHook.uc">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Src\WaveCOM\Classes\X2DownloadableContentInfo_WaveCOM.uc" />
     <Content Include="Src\XComMissionLogic\Classes\X2DownloadableContentInfo_XComMissionLogic.uc">
       <SubType>Content</SubType>
