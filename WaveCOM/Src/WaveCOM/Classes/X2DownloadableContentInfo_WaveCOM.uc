@@ -18,7 +18,7 @@ var config array<name> CantSellResource;
 struct DynamicUpgradeData
 {
 	var name UpgradeName;
-	var StrategyCost BaseCost;
+	var array<StrategyCost> BaseCost;
 	var int SupplyIncrement;
 	var int SupplyMax;
 	var int FirstIncrease;
@@ -170,10 +170,14 @@ static function UpdateResearchTemplates ()
 	local X2TechTemplate Tech;
 	local int BasePoints;
 	local int UpgradeIndex;
+	local int DiffIndex;
 	local DynamicUpgradeData CostData;
 
 	Manager = class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager();
 	Techs = Manager.GetAllTemplatesOfClass(class'X2TechTemplate');
+	DiffIndex = class'XComGameState_CampaignSettings'.static.GetDifficultyFromSettings();
+
+
 	foreach Techs(TechTemplate)
 	{
 		if (Tech.PointsToComplete > 0)
@@ -191,7 +195,11 @@ static function UpdateResearchTemplates ()
 			{
 				CostData = default.RepeatableUpgradeCosts[UpgradeIndex];
 
-				CostData.BaseCost = Tech.Cost;
+				while (CostData.BaseCost.Length < 4)
+				{
+					CostData.BaseCost.Add(1);
+				}
+				CostData.BaseCost[DiffIndex] = Tech.Cost;
 
 				default.RepeatableUpgradeCosts.Remove(UpgradeIndex, 1);
 				default.RepeatableUpgradeCosts.AddItem(CostData);
@@ -207,8 +215,10 @@ static function UpdateResearchCostDynamic (int SquadSize)
 	local DynamicUpgradeData CostData;
 	local X2TechTemplate Tech;
 	local XComGameStateHistory History;
+	local int DiffIndex;
 
 	History = `XCOMHISTORY;
+	DiffIndex = class'XComGameState_CampaignSettings'.static.GetDifficultyFromSettings();
 
 	foreach History.IterateByClassType(class'XComGameState_Tech', TechState)
 	{
@@ -218,18 +228,22 @@ static function UpdateResearchCostDynamic (int SquadSize)
 		{
 			Tech = TechState.GetMyTemplate();
 			CostData = default.RepeatableUpgradeCosts[UpgradeIndex];
-			if (CostData.ScaleWithSquadSize)
-				StackCount = SquadSize;
-			else
-				StackCount = TechState.TimesResearched;
-				
-			Tech.Cost = CostData.BaseCost;
-			if (StackCount > CostData.FirstIncrease)
+
+			if (CostData.BaseCost.Length > DiffIndex)
 			{
-				StackCount = StackCount - CostData.FirstIncrease;
-				AddSupplyCost(Tech.Cost.ResourceCosts, Min(Round(CostData.SupplyIncrement * StackCount), CostData.SupplyMax));
+				if (CostData.ScaleWithSquadSize)
+					StackCount = SquadSize;
+				else
+					StackCount = TechState.TimesResearched;
+				
+				Tech.Cost = CostData.BaseCost[DiffIndex];
+				if (StackCount > CostData.FirstIncrease)
+				{
+					StackCount = StackCount - CostData.FirstIncrease;
+					AddSupplyCost(Tech.Cost.ResourceCosts, Min(Round(CostData.SupplyIncrement * StackCount), CostData.SupplyMax));
+				}
+				class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager().AddStrategyElementTemplate(Tech, true);
 			}
-			class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager().AddStrategyElementTemplate(Tech, true);
 		}
 	}
 }
