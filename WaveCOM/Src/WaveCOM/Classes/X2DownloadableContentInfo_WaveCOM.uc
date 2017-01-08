@@ -26,7 +26,6 @@ struct DynamicUpgradeData
 };
 
 var config array<DynamicUpgradeData> RepeatableUpgradeCosts;
-var config bool CostUpdated; // Please do not add this config to INI, also never ever save the config of this class
 
 static event OnPostTemplatesCreated()
 {
@@ -177,23 +176,26 @@ static function UpdateResearchTemplates ()
 	Techs = Manager.GetAllTemplatesOfClass(class'X2TechTemplate');
 	foreach Techs(TechTemplate)
 	{
-		Tech = X2TechTemplate(TechTemplate);
-		BasePoints = Tech.PointsToComplete;
-		AddSupplyCost(Tech.Cost.ResourceCosts, Round(BasePoints * default.WaveCOMResearchSupplyCostRatio));
-		Tech.bJumpToLabs = false;
-		Tech.PointsToComplete = 0;
-		Manager.AddStrategyElementTemplate(Tech, true);
-
-		UpgradeIndex = default.RepeatableUpgradeCosts.Find('UpgradeName', Tech.DataName);
-
-		if (UpgradeIndex != INDEX_NONE)
+		if (Tech.PointsToComplete > 0)
 		{
-			CostData = default.RepeatableUpgradeCosts[UpgradeIndex];
+			Tech = X2TechTemplate(TechTemplate);
+			BasePoints = Tech.PointsToComplete;
+			AddSupplyCost(Tech.Cost.ResourceCosts, Round(BasePoints * default.WaveCOMResearchSupplyCostRatio));
+			Tech.bJumpToLabs = false;
+			Tech.PointsToComplete = 0;
+			Manager.AddStrategyElementTemplate(Tech, true);
 
-			CostData.BaseCost = Tech.Cost;
+			UpgradeIndex = default.RepeatableUpgradeCosts.Find('UpgradeName', Tech.DataName);
 
-			default.RepeatableUpgradeCosts.Remove(UpgradeIndex, 1);
-			default.RepeatableUpgradeCosts.AddItem(CostData);
+			if (UpgradeIndex != INDEX_NONE)
+			{
+				CostData = default.RepeatableUpgradeCosts[UpgradeIndex];
+
+				CostData.BaseCost = Tech.Cost;
+
+				default.RepeatableUpgradeCosts.Remove(UpgradeIndex, 1);
+				default.RepeatableUpgradeCosts.AddItem(CostData);
+			}
 		}
 	}
 }

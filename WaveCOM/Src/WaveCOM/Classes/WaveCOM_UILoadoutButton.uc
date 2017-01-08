@@ -18,12 +18,8 @@ simulated function InitScreen(UIScreen ScreenParent)
 
 	CurrentDeployCost = 50;
 
-	if (!class'X2DownloadableContentInfo_WaveCOM'.default.CostUpdated)
-	{
-		class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchTemplates();
-		class'X2DownloadableContentInfo_WaveCOM'.static.UpdateSchematicTemplates();
-		class'X2DownloadableContentInfo_WaveCOM'.default.CostUpdated = true;
-	}
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchTemplates();
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateSchematicTemplates();
 
 	TacHUDScreen = UITacticalHUD(ScreenParent);
 	`log("Loading my button thing.");
