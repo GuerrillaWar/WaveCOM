@@ -15,6 +15,19 @@ var config array<name> NonUpgradeSchematics;
 var config array<name> ObsoleteOTSUpgrades;
 var config array<name> CantSellResource;
 
+struct DynamicUpgradeData
+{
+	var name UpgradeName;
+	var StrategyCost BaseCost;
+	var int SupplyIncrement;
+	var int SupplyMax;
+	var int FirstIncrease;
+	var bool ScaleWithSquadSize;
+};
+
+var config array<DynamicUpgradeData> RepeatableUpgradeCosts;
+var config bool CostUpdated; // Please do not add this config to INI, also never ever save the config of this class
+
 static event OnPostTemplatesCreated()
 {
 	`log("WaveCOM :: Present And Correct");
@@ -157,6 +170,8 @@ static function UpdateResearchTemplates ()
 	local X2StrategyElementTemplate TechTemplate;
 	local X2TechTemplate Tech;
 	local int BasePoints;
+	local int UpgradeIndex;
+	local DynamicUpgradeData CostData;
 
 	Manager = class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager();
 	Techs = Manager.GetAllTemplatesOfClass(class'X2TechTemplate');
@@ -168,6 +183,52 @@ static function UpdateResearchTemplates ()
 		Tech.bJumpToLabs = false;
 		Tech.PointsToComplete = 0;
 		Manager.AddStrategyElementTemplate(Tech, true);
+
+		UpgradeIndex = default.RepeatableUpgradeCosts.Find('UpgradeName', Tech.DataName);
+
+		if (UpgradeIndex != INDEX_NONE)
+		{
+			CostData = default.RepeatableUpgradeCosts[UpgradeIndex];
+
+			CostData.BaseCost = Tech.Cost;
+
+			default.RepeatableUpgradeCosts.Remove(UpgradeIndex, 1);
+			default.RepeatableUpgradeCosts.AddItem(CostData);
+		}
+	}
+}
+
+static function UpdateResearchCostDynamic (int SquadSize)
+{
+	local XComGameState_Tech TechState;
+	local int UpgradeIndex, StackCount;
+	local DynamicUpgradeData CostData;
+	local X2TechTemplate Tech;
+	local XComGameStateHistory History;
+
+	History = `XCOMHISTORY;
+
+	foreach History.IterateByClassType(class'XComGameState_Tech', TechState)
+	{
+		UpgradeIndex = default.RepeatableUpgradeCosts.Find('UpgradeName', TechState.GetMyTemplateName());
+
+		if (UpgradeIndex != INDEX_NONE)
+		{
+			Tech = TechState.GetMyTemplate();
+			CostData = default.RepeatableUpgradeCosts[UpgradeIndex];
+			if (CostData.ScaleWithSquadSize)
+				StackCount = SquadSize;
+			else
+				StackCount = TechState.TimesResearched;
+				
+			Tech.Cost = CostData.BaseCost;
+			if (StackCount > CostData.FirstIncrease)
+			{
+				StackCount = StackCount - CostData.FirstIncrease;
+				AddSupplyCost(Tech.Cost.ResourceCosts, Min(Round(CostData.SupplyIncrement * StackCount), CostData.SupplyMax));
+			}
+			class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager().AddStrategyElementTemplate(Tech, true);
+		}
 	}
 }
 
