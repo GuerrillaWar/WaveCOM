@@ -68,6 +68,7 @@ function EventListenerReturn ResearchComplete(Object EventData, Object EventSour
 			}
 		}
 		`XEVENTMGR.TriggerEvent('UpdateDeployCost');
+		`XEVENTMGR.TriggerEvent('UpdateResearchCost');
 	}
 
 	return ELR_NoInterrupt;

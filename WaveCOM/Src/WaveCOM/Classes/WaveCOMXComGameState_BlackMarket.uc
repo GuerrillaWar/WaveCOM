@@ -38,6 +38,95 @@ function array<XComGameState_Item> RollForBlackMarketLoot(XComGameState NewGameS
 	return ItemList;
 }
 
+function StrategyCost GetPersonnelForSaleItemCost(optional float CostScalar = 1.0f)
+{
+	local StrategyCost Cost;
+	local ArtifactCost ResourceCost;
+	local int IntelAmount, IntelVariance;
+	local XComGameState_Unit UnitState;
+	local int XComCount;
+
+	`log("Updating deploy cost");
+	XComCount = 0;
+	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
+	{
+		// Don't make summoned/MC'd units not count
+		//Suggestion: Add units to XCOMHQ.Squad for better tracking
+		if( (UnitState.GetTeam() == eTeam_XCom) && UnitState.IsAlive() && UnitState.IsASoldier())
+		{
+			`log("Found Unit:" @UnitState.GetFullName());
+			++XComCount;
+		}
+	}
+
+	IntelAmount = default.PersonnelItemIntelCost[`DIFFICULTYSETTING] + ((NumTimesAppeared - 1) * default.PersonnelItemIntelCostIncrease[`DIFFICULTYSETTING]);
+	IntelVariance = Round((float(`SYNC_RAND(default.IntelCostVariance[`DIFFICULTYSETTING])) / 100.0)* float(IntelAmount));
+
+	if(class'X2StrategyGameRulesetDataStructures'.static.Roll(50))
+	{
+		IntelVariance = -IntelVariance;
+	}
+
+	IntelAmount += IntelVariance;
+	IntelAmount = Round(float(IntelAmount) * CostScalar);
+
+	// Make it a multiple of 5
+	IntelAmount = Round(float(IntelAmount) / 5.0) * 5;
+
+	ResourceCost.ItemTemplateName = 'Intel';
+	ResourceCost.Quantity = IntelAmount;
+	Cost.ResourceCosts.AddItem(ResourceCost);
+
+	ResourceCost.ItemTemplateName = 'Supplies';
+	if (XComCount > class'WaveCOM_UILoadoutButton'.default.WaveCOMDeployCosts.Length - 1)
+	{
+		ResourceCost.Quantity = class'WaveCOM_UILoadoutButton'.default.WaveCOMDeployCosts[class'WaveCOM_UILoadoutButton'.default.WaveCOMDeployCosts.Length - 1];
+	}
+	else
+	{
+		ResourceCost.Quantity = class'WaveCOM_UILoadoutButton'.default.WaveCOMDeployCosts[XComCount];
+	}
+
+	ResourceCost.Quantity = Round(ResourceCost.Quantity * (100 / (100 - GoodsCostPercentDiscount))); // Counter Discount
+	Cost.ResourceCosts.AddItem(ResourceCost);
+
+	return Cost;
+}
+
+function UpdateForSaleItemDiscount()
+{
+	local int idx;
+
+	for (idx = 0; idx < ForSaleItems.Length; idx++)
+	{
+		if (ForSaleItems[idx].Cost.ResourceCosts.Find('ItemTemplateName', 'Supplies') == INDEX_NONE) // Skip discount on supplies
+		{
+			ForSaleItems[idx].DiscountPercent = GoodsCostPercentDiscount;
+		}
+	}
+}
+
+function bool UpdateBuyPrices()
+{
+	local int idx, SupCost;
+	local StrategyCost FakeCost;
+	local bool b;
+	b = super.UpdateBuyPrices();
+
+	for (idx = 0; idx < ForSaleItems.Length; idx++) // Refresh supplies costs
+	{
+		SupCost = ForSaleItems[idx].Cost.ResourceCosts.Find('ItemTemplateName', 'Supplies');
+		if (SupCost != INDEX_NONE)
+		{
+			FakeCost = GetPersonnelForSaleItemCost(PriceReductionScalar);
+			ForSaleItems[idx].Cost.ResourceCosts.Remove(SupCost, 1); 
+			ForSaleItems[idx].Cost.ResourceCosts.AddItem(FakeCost.ResourceCosts[1]);
+		}
+	}
+
+	return b;
+}
+
 function SetUpForSaleItems(XComGameState NewGameState)
 {
 	local X2StrategyElementTemplateManager StratMgr;
@@ -93,6 +182,34 @@ function SetUpForSaleItems(XComGameState NewGameState)
 	ForSaleItem.Image = RewardState.GetRewardImage();
 	ForSaleItem.CostScalars = GoodsCostScalars;
 	ForSaleItem.DiscountPercent = GoodsCostPercentDiscount;
+
+	ForSaleItems.AddItem(ForSaleItem);
+
+	// Personnel Reward
+	ForSaleItem = EmptyForSaleItem;
+	RewardTemplate = X2RewardTemplate(StratMgr.FindStrategyElementTemplate('Reward_Soldier'));
+
+	RewardState = RewardTemplate.CreateInstanceFromTemplate(NewGameState);
+
+	NewGameState.AddStateObject(RewardState);
+	RewardState.GenerateReward(NewGameState, , Region);
+	ForSaleItem.RewardRef = RewardState.GetReference();
+
+	ForSaleItem.Title = RewardState.GetRewardString();
+	ForSaleItem.Cost = GetPersonnelForSaleItemCost(PriceReductionScalar);
+	ForSaleItem.Desc = RewardState.GetBlackMarketString();
+	ForSaleItem.Image = RewardState.GetRewardImage();
+	ForSaleItem.CostScalars = GoodsCostScalars;
+	ForSaleItem.DiscountPercent = GoodsCostPercentDiscount;
+
+	// No Avenger to take photo
+	//if (ForSaleItem.Image == "")
+	//{
+		//if (!Photo.HasPendingHeadshot(RewardState.RewardObjectReference, OnUnitHeadCaptureFinished))
+		//{
+			//Photo.AddHeadshotRequest(RewardState.RewardObjectReference, 'UIPawnLocation_ArmoryPhoto', 'SoldierPicture_Head_Armory', 512, 512, OnUnitHeadCaptureFinished);
+		//}
+	//}
 
 	ForSaleItems.AddItem(ForSaleItem);
 }

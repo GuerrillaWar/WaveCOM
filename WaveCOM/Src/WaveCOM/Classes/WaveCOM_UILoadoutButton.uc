@@ -102,10 +102,13 @@ simulated function InitScreen(UIScreen ScreenParent)
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'UpdateDeployCost', OnDeath, ELD_Immediate);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'UpdateDeployCostDelayed', OnDeath, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'ResearchCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'ResearchCompleted', UpdateTechCost, ELD_OnStateSubmitted);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'UpdateResearchCost', UpdateTechCost, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'ItemConstructionCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'PsiTrainingUpdate', UpdateResourceHUD, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'BlackMarketGoodsSold', UpdateResourceHUD, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'BlackMarketPurchase', UpdateResourceHUD, ELD_OnStateSubmitted);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'RequestRefreshAllUnits', RefreshAllUnits, ELD_OnStateSubmitted);
 }
 
 public function XComGameState_Unit GetNonDeployedSoldier()
@@ -129,7 +132,7 @@ public function XComGameState_Unit GetNonDeployedSoldier()
 	return none;
 }
 
-private function UpdateDeployCost ()
+private function int UpdateDeployCost ()
 {
 	local XComGameState_Unit UnitState;
 	local int XComCount;
@@ -167,6 +170,8 @@ private function UpdateDeployCost ()
 		Button6.SetText("Deploy Soldier - " @CurrentDeployCost);
 	}
 
+	return XComCount;
+
 }
 
 private function EventListenerReturn OnDeath(Object EventData, Object EventSource, XComGameState NewGameState, Name InEventID)
@@ -193,6 +198,61 @@ private function EventListenerReturn OnWaveEnd(Object EventData, Object EventSou
 private function EventListenerReturn UpdateResourceHUD(Object EventData, Object EventSource, XComGameState NewGameState, Name InEventID)
 {
 	UpdateResources();
+	return ELR_NoInterrupt;
+}
+
+private function EventListenerReturn UpdateTechCost(Object EventData, Object EventSource, XComGameState NewGameState, Name InEventID)
+{
+	local int NumSoldier;
+	local UISimpleCommodityScreen ProjectScreen;
+	NumSoldier = UpdateDeployCost();
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier);
+
+	// Refresh foreground
+	ProjectScreen = UISimpleCommodityScreen(TacHUDScreen.Movie.Stack.GetFirstInstanceOf(class'UIChooseProject'));
+	if (ProjectScreen == none)
+		ProjectScreen = UISimpleCommodityScreen(TacHUDScreen.Movie.Stack.GetFirstInstanceOf(class'UIChooseResearch'));
+	if (ProjectScreen != none)
+	{
+		ProjectScreen.GetItems();
+		ProjectScreen.PopulateData();
+	}
+
+	return ELR_NoInterrupt;
+}
+
+private function EventListenerReturn RefreshAllUnits(Object EventData, Object EventSource, XComGameState TriggeringGameState, Name InEventID)
+{
+	local XComGameState_Unit UnitState;
+	local XComGameState NewGameState;
+	local StateObjectReference AbilityReference;
+	local WaveCOMGameStateContext_UpdateUnit EffectContext;
+	local XComGameState_HeadquartersXCom XComHQ;
+			
+	XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+
+	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
+	{
+		if( UnitState.GetTeam() == eTeam_XCom && UnitState.IsAlive() && XComHQ.Squad.Find('ObjectID', UnitState.GetReference().ObjectID) != INDEX_NONE && !UnitState.bRemovedFromPlay)
+		{
+			EffectContext = class'WaveCOMGameStateContext_UpdateUnit'.static.CreateChangeStateUU("Clean Unit State", UnitState);
+			NewGameState = EffectContext.GetGameState();
+			UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitState.ObjectID));
+			NewGameState.AddStateObject(UnitState);
+			`log("Cleaning and readding Abilities");
+			foreach UnitState.Abilities(AbilityReference)
+			{
+				NewGameState.RemoveStateObject(AbilityReference.ObjectID);
+			}
+
+			class'WaveCOM_UIArmory_FieldLoadout'.static.CleanUpStats(NewGameState, UnitState, EffectContext);
+
+			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+			
+			class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnit(UnitState.GetReference().ObjectID);
+		}
+	}
+
 	return ELR_NoInterrupt;
 }
 
@@ -253,7 +313,10 @@ public function OpenBlackMarket(UIButton Button)
 public function OpenResearchMenu(UIButton Button)
 {
 	local UIChooseResearch LoadedScreen;
+	local int NumSoldier;
 	UpdateResources();
+	NumSoldier = UpdateDeployCost();
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier);
 	LoadedScreen = TacHUDScreen.Movie.Pres.Spawn(class'UIChooseResearch', TacHUDScreen.Movie.Pres);
 	TacHUDScreen.Movie.Stack.Push(LoadedScreen, TacHUDScreen.Movie);
 }
@@ -261,7 +324,10 @@ public function OpenResearchMenu(UIButton Button)
 public function OpenProjectMenu(UIButton Button)
 {
 	local UIChooseProject LoadedScreen;
+	local int NumSoldier;
 	UpdateResources();
+	NumSoldier = UpdateDeployCost();
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier);
 	LoadedScreen = TacHUDScreen.Movie.Pres.Spawn(class'UIChooseProject', TacHUDScreen.Movie.Pres);
 	TacHUDScreen.Movie.Stack.Push(LoadedScreen, TacHUDScreen.Movie);
 }
