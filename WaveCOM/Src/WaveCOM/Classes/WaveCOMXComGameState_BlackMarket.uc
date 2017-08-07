@@ -87,7 +87,7 @@ function StrategyCost GetPersonnelForSaleItemCost(optional float CostScalar = 1.
 		ResourceCost.Quantity = class'WaveCOM_UILoadoutButton'.default.WaveCOMDeployCosts[XComCount];
 	}
 
-	ResourceCost.Quantity = Round(ResourceCost.Quantity * (100 / (100 - GoodsCostPercentDiscount))); // Counter Discount
+	ResourceCost.Quantity = Round(ResourceCost.Quantity * (100.0f / (100.0f - GoodsCostPercentDiscount))); // Counter Discount
 	Cost.ResourceCosts.AddItem(ResourceCost);
 
 	return Cost;

@@ -204,12 +204,16 @@ static function UpdateUnit(int UnitID)
 	local XComGameState_Unit Unit, CosmeticUnit;
 	local Vector SpawnLocation;
 	local XGUnit Visualizer;
+	local XGWeapon WeaponVis;
+	local XComWeapon WeaponMeshVis;
 	local StateObjectReference ItemReference, CosmeticUnitRef;
 	local StateObjectReference AbilityReference;
 	local XComGameState_Item ItemState;
 	local X2EquipmentTemplate EquipmentTemplate;
 	local XComWorldData WorldData;
 	local XComAISpawnManager SpawnManager;
+	local XComPerkContent kPawnPerk;
+	local int i;
 
 	NewGameState = class'XComGameStateContext_ChangeContainer'.static.CreateChangeState("Refresh Inventory");
 
@@ -222,7 +226,18 @@ static function UpdateUnit(int UnitID)
 	}
 	Unit.Abilities.Length = 0;
 	Visualizer = XGUnit(Unit.FindOrCreateVisualizer());
-	Visualizer.GetPawn().StopPersistentPawnPerkFX(); // Remove all abilities visualizers
+	foreach Visualizer.GetPawn().arrTargetingPerkContent(kPawnPerk)
+	{
+		kPawnPerk.RemovePerkTarget( XGUnit(Visualizer.GetPawn().m_kGameUnit) );
+	}
+	i = 0;
+	while (Visualizer.GetPawn().arrPawnPerkContent.Length > i)
+	{
+		kPawnPerk = Visualizer.GetPawn().arrPawnPerkContent[i];
+		kPawnPerk.StopPersistentFX(); // Remove all abilities visualizers
+		kPawnPerk.Destroy();
+		Visualizer.GetPawn().arrPawnPerkContent.Remove(i, 1);
+	}
 
 	`log("Reintroducing Inventory");
 	foreach Unit.InventoryItems(ItemReference)
@@ -282,6 +297,16 @@ static function UpdateUnit(int UnitID)
 
 				`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
 			}
+
+			WeaponVis = XGWeapon(ItemState.GetVisualizer());
+			if (WeaponVis != None && ItemState.GetMyTemplate().iItemSize > 0)
+			{
+				WeaponMeshVis = WeaponVis.GetEntity();
+				if (WeaponMeshVis != None)
+				{
+					WeaponMeshVis.Mesh.SetHidden(false);
+				}
+			}
 		}
 	}
 	
@@ -309,6 +334,7 @@ static function UpdateUnitState(int UnitID, XComGameState NewGameState)
 	local XComGameState_Unit Unit;
 	local StateObjectReference AbilityReference;
 	local XGUnit Visualizer;
+	local XComPerkContent kPawnPerk;
 
 	Unit = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitID));
 
@@ -319,7 +345,14 @@ static function UpdateUnitState(int UnitID, XComGameState NewGameState)
 	}
 	Unit.Abilities.Length = 0;
 	Visualizer = XGUnit(Unit.FindOrCreateVisualizer());
-	Visualizer.GetPawn().StopPersistentPawnPerkFX(); // Remove all abilities visualizers
+	foreach Visualizer.GetPawn().arrPawnPerkContent(kPawnPerk)
+	{
+		kPawnPerk.StopPersistentFX(); // Remove all abilities visualizers
+	}
+	foreach Visualizer.GetPawn().arrTargetingPerkContent(kPawnPerk)
+	{
+		kPawnPerk.RemovePerkTarget( XGUnit(Visualizer.GetPawn().m_kGameUnit) );
+	}
 
 	CleanUpStats(NewGameState, Unit);
 
@@ -338,9 +371,13 @@ static function UpdateUnitState(int UnitID, XComGameState NewGameState)
 
 simulated function OnCancel()
 {
+	local WaveCOM_UILoadoutButton WCScreen;
 	`log("Cancelling");
 	super.OnCancel();
 	UpdateActiveUnit();
+	WCScreen = WaveCOM_UILoadoutButton(TacHUDScreen.GetChildByName('WaveCOMUI'));
+	if (WCScreen != none)
+		WCScreen.RefreshCanRankUp();
 }
 
 function SetTacHUDScreen(UITacticalHUD Screenie)
@@ -761,6 +798,18 @@ static function RefillInventory(XComGameState NewGameState, XComGameState_Unit U
 				ItemState.CosmeticUnitRef = BlankReference;
 				NewGameState.AddStateObject(ItemState);
 			}
+
+			// Unload all ammo
+			if (NewGameState.GetGameStateForObjectID(ItemReference.ObjectID) == none)
+			{
+				ItemState = XComGameState_Item(NewGameState.CreateStateObject(class'XComGameState_Item', ItemReference.ObjectID));
+				NewGameState.AddStateObject(ItemState);
+			}
+			else
+			{
+				ItemState = XComGameState_Item(NewGameState.GetGameStateForObjectID(ItemReference.ObjectID));
+			}
+			ItemState.LoadedAmmo.ObjectID = -1;
 		}
 	}
 	
@@ -814,17 +863,107 @@ function EventListenerReturn OnGameStateSubmitted(Object EventData, Object Event
 	return ELR_NoInterrupt;
 }
 
+simulated function CycleToSoldierNew(StateObjectReference NewRef)
+{
+	local WaveCOM_UILoadoutButton WCScreen;
+	WCScreen = WaveCOM_UILoadoutButton(TacHUDScreen.GetChildByName('WaveCOMUI'));
+	if (WCScreen != none)
+	{
+		OnCancel();
+		WCScreen.UIArmory_FieldLoad = WCScreen.TacHUDScreen.Movie.Pres.Spawn(class'WaveCOM_UIArmory_FieldLoadout', WCScreen.TacHUDScreen.Movie.Pres);
+		WCScreen.TacHUDScreen.Movie.Stack.Push(WCScreen.UIArmory_FieldLoad); 
+		WCScreen.UIArmory_FieldLoad.SetTacHUDScreen(WCScreen.TacHUDScreen);
+		WCScreen.UIArmory_FieldLoad.InitArmory(NewRef);
+	}
+}
+
 simulated function PrevSoldier()
 {
-	// Do not switch soldiers in this screen
+	local XComGameState_HeadquartersXCom XComHQ;
+	local int idx;
+			
+	XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+
+	if (XComHQ == none)
+	{
+		return;
+	}
+
+	idx = XComHQ.Squad.Find('ObjectID', UnitReference.ObjectID);
+	if (idx == INDEX_NONE)
+		return;
+	idx = (idx + XComHQ.Squad.Length - 1) % XComHQ.Squad.Length;
+
+	CycleToSoldierNew(XComHQ.Squad[idx]);
 }
 
 simulated function NextSoldier()
 {
-	// Do not switch soldiers in this screen
+	local XComGameState_HeadquartersXCom XComHQ;
+	local int idx;
+			
+	XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+
+	if (XComHQ == none)
+	{
+		return;
+	}
+
+	idx = XComHQ.Squad.Find('ObjectID', UnitReference.ObjectID);
+	if (idx == INDEX_NONE)
+		return;
+	idx = (idx + XComHQ.Squad.Length + 1) % XComHQ.Squad.Length;
+
+	CycleToSoldierNew(XComHQ.Squad[idx]);
+}
+
+simulated function UpdateNavHelp()
+{
+	local int i;
+	local string PrevKey, NextKey;
+	local XGParamTag LocTag;
+
+	if(bUseNavHelp)
+	{
+		NavHelp.ClearButtonHelp();
+
+		NavHelp.AddBackButton(OnCancel);
+
+		LocTag = XGParamTag(`XEXPANDCONTEXT.FindTag("XGParam"));
+		LocTag.StrValue0 = Movie.Pres.m_kKeybindingData.GetKeyStringForAction(PC.PlayerInput, eTBC_PrevUnit);
+		PrevKey = `XEXPAND.ExpandString(PrevSoldierKey);
+		LocTag.StrValue0 = Movie.Pres.m_kKeybindingData.GetKeyStringForAction(PC.PlayerInput, eTBC_NextUnit);
+		NextKey = `XEXPAND.ExpandString(NextSoldierKey);
+
+		
+		NavHelp.SetButtonType("XComButtonIconPC");
+		i = eButtonIconPC_Prev_Soldier;
+		NavHelp.AddCenterHelp( string(i), "", PrevSoldier, false, PrevKey);
+		i = eButtonIconPC_Next_Soldier; 
+		NavHelp.AddCenterHelp( string(i), "", NextSoldier, false, NextKey);
+		NavHelp.SetButtonType("");
+
+		NavHelp.AddSelectNavHelp();
+
+		if (`ISCONTROLLERACTIVE && 
+			XComHQPresentationLayer(Movie.Pres) != none && IsAllowedToCycleSoldiers() && 
+			class'UIUtilities_Strategy'.static.HasSoldiersToCycleThrough(UnitReference, CanCycleTo) &&
+			//<bsg> 5435, ENABLE_NAVHELP_DURING_TUTORIAL, DCRUZ, 2016/06/23
+			//INS:
+			class'XComGameState_HeadquartersXCom'.static.IsObjectiveCompleted('T0_M2_WelcomeToArmory'))
+			//</bsg>
+		{
+			NavHelp.AddLeftHelp(class'UIUtilities_Input'.static.InsertGamepadIcons("%LB %RB" @ m_strTabNavHelp));
+		}
+		
+		if( `ISCONTROLLERACTIVE )
+			NavHelp.AddLeftHelp(class'UIUtilities_Input'.static.InsertGamepadIcons("%RS" @ m_strRotateNavHelp));
+
+		NavHelp.Show();
+	}
 }
 
 defaultproperties
 {
-	bUseNavHelp = false;
+	bUseNavHelp = true;
 }

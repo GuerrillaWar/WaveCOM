@@ -1,6 +1,6 @@
 // This is an Unreal Script
 
-class WaveCOM_UILoadoutButton extends UIPanel config(WaveCOM);  
+class WaveCOM_UILoadoutButton extends UIPanel config(WaveCOM);
 // This event is triggered after a screen is initialized. This is called after  // the visuals (if any) are loaded in Flash.
 var UIButton Button1, Button2, Button3, Button4, Button5, Button6, Button7, Button8;
 var UIPanel ActionsPanel;
@@ -15,6 +15,8 @@ simulated function InitScreen(UIScreen ScreenParent)
 {
 	local Object ThisObj;
 	local WaveCOM_MissionLogic_WaveCOM WaveLogic;
+
+	super.InitPanel('WaveCOMUI');
 
 	CurrentDeployCost = 50;
 
@@ -96,12 +98,11 @@ simulated function InitScreen(UIScreen ScreenParent)
 	}
 
 	ThisObj = self;
-	`XEVENTMGR.RegisterForEvent(ThisObj, 'WaveCOM_WaveStart', OnWaveStart, ELD_Immediate);
-	`XEVENTMGR.RegisterForEvent(ThisObj, 'WaveCOM_WaveEnd', OnWaveEnd, ELD_Immediate);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'WaveCOM_WaveStart', OnWaveStart, ELD_OnStateSubmitted);
+	`XEVENTMGR.RegisterForEvent(ThisObj, 'WaveCOM_WaveEnd', OnWaveEnd, ELD_OnVisualizationBlockCompleted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'UnitDied', OnDeath, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'UpdateDeployCost', OnDeath, ELD_Immediate);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'UpdateDeployCostDelayed', OnDeath, ELD_OnStateSubmitted);
-	`XEVENTMGR.RegisterForEvent(ThisObj, 'ResearchCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'ResearchCompleted', UpdateTechCost, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'UpdateResearchCost', UpdateTechCost, ELD_OnStateSubmitted);
 	`XEVENTMGR.RegisterForEvent(ThisObj, 'ItemConstructionCompleted', UpdateResourceHUD, ELD_OnStateSubmitted);
@@ -176,7 +177,6 @@ private function int UpdateDeployCost ()
 
 private function EventListenerReturn OnDeath(Object EventData, Object EventSource, XComGameState NewGameState, Name InEventID)
 {
-	UpdateResources();
 	UpdateDeployCost();
 	return ELR_NoInterrupt;
 }
@@ -192,6 +192,8 @@ private function EventListenerReturn OnWaveEnd(Object EventData, Object EventSou
 {
 	UpdateResources();
 	ActionsPanel.Show();
+	RefreshRewardDecks();
+	RefreshCanRankUp();
 	return ELR_NoInterrupt;
 }
 
@@ -205,8 +207,11 @@ private function EventListenerReturn UpdateTechCost(Object EventData, Object Eve
 {
 	local int NumSoldier;
 	local UISimpleCommodityScreen ProjectScreen;
+	local UIAlert Alert;
+	local XComGameState_Tech TechState;
+
 	NumSoldier = UpdateDeployCost();
-	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier);
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier, `XCOMHQ.ProvingGroundPercentDiscount);
 
 	// Refresh foreground
 	ProjectScreen = UISimpleCommodityScreen(TacHUDScreen.Movie.Stack.GetFirstInstanceOf(class'UIChooseProject'));
@@ -218,7 +223,63 @@ private function EventListenerReturn UpdateTechCost(Object EventData, Object Eve
 		ProjectScreen.PopulateData();
 	}
 
+	TechState = XComGameState_Tech(EventData);
+	if (TechState != none && TechState.ItemReward != None)
+	{
+		Alert = Spawn(class'UIAlert', self);
+		Alert.eAlert = eAlert_ItemReceivedProvingGround;
+		Alert.ItemTemplate = TechState.ItemReward;
+		Alert.TechRef = TechState.GetReference();
+		Alert.fnCallback = ItemReceivedCB;
+		Alert.SoundToPlay = "Geoscape_ItemComplete";
+		TacHUDScreen.Movie.Stack.Push(Alert);
+	}
+	else if (TechState != none && TechState.GetMyTemplate().bProvingGround)
+	{	
+		Alert = Spawn(class'UIAlert', `HQPRES);
+		Alert.eAlert = eAlert_ProvingGroundProjectComplete;
+		Alert.TechRef = TechState.GetReference();
+		Alert.fnCallback = PGCompletedCB;
+		Alert.SoundToPlay = "Geoscape_ProjectComplete";
+		TacHUDScreen.Movie.Stack.Push(Alert);
+	}
+	else if (TechState != none)
+	{		
+		Alert = Spawn(class'UIAlert', self);
+		Alert.TechRef = TechState.GetReference();
+		Alert.eAlert = eAlert_ResearchComplete;
+		Alert.fnCallback = ResearchCB;
+		Alert.SoundToPlay = "Geoscape_ResearchComplete";
+		TacHUDScreen.Movie.Stack.Push(Alert);
+	}
+
+	UpdateResourceHUD(EventData, EventSource, NewGameState, InEventID);
+
 	return ELR_NoInterrupt;
+}
+
+simulated function ResearchCB(EUIAction eAction, UIAlert AlertData, optional bool bInstant = false)
+{
+	if (eAction == eUIAction_Accept)
+	{
+		OpenResearchMenu(Button4);
+	}
+}
+
+simulated function PGCompletedCB(EUIAction eAction, UIAlert AlertData, optional bool bInstant = false)
+{
+	local UIChooseProject LoadedScreen;
+	if (eAction != eUIAction_Accept)
+	{
+		LoadedScreen = UIChooseProject(TacHUDScreen.Movie.Stack.GetFirstInstanceOf(class'UIChooseProject'));
+		if (LoadedScreen != none)
+			LoadedScreen.OnCancel();
+	}
+}
+
+simulated function ItemReceivedCB(EUIAction eAction, UIAlert AlertData, optional bool bInstant = false)
+{
+
 }
 
 private function EventListenerReturn RefreshAllUnits(Object EventData, Object EventSource, XComGameState TriggeringGameState, Name InEventID)
@@ -316,7 +377,7 @@ public function OpenResearchMenu(UIButton Button)
 	local int NumSoldier;
 	UpdateResources();
 	NumSoldier = UpdateDeployCost();
-	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier);
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier, `XCOMHQ.ProvingGroundPercentDiscount);
 	LoadedScreen = TacHUDScreen.Movie.Pres.Spawn(class'UIChooseResearch', TacHUDScreen.Movie.Pres);
 	TacHUDScreen.Movie.Stack.Push(LoadedScreen, TacHUDScreen.Movie);
 }
@@ -327,7 +388,7 @@ public function OpenProjectMenu(UIButton Button)
 	local int NumSoldier;
 	UpdateResources();
 	NumSoldier = UpdateDeployCost();
-	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier);
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier, `XCOMHQ.ProvingGroundPercentDiscount);
 	LoadedScreen = TacHUDScreen.Movie.Pres.Spawn(class'UIChooseProject', TacHUDScreen.Movie.Pres);
 	TacHUDScreen.Movie.Stack.Push(LoadedScreen, TacHUDScreen.Movie);
 }
@@ -412,6 +473,7 @@ public function OpenDeployMenu(UIButton Button)
 	if (StrategyUnit != none)
 	{
 		StrategyUnit = AddStrategyUnitToBoard(StrategyUnit, History);
+		class'WaveCOM_MissionLogic_WaveCOM'.static.FullRefreshSoldier(StrategyUnit.GetReference());
 		if (StrategyUnit == none)
 		{
 			kDialogData.eType = eDialog_Alert;
@@ -474,6 +536,7 @@ public function OpenDeployMenu(UIButton Button)
 			XComHQ.Squad.AddItem(StrategyUnit.GetReference());
 			NewGameState.AddStateObject(XComHQ);
 			`XCOMGAME.GameRuleset.SubmitGameState(NewGameState);
+			class'WaveCOM_MissionLogic_WaveCOM'.static.FullRefreshSoldier(StrategyUnit.GetReference());
 			UpdateDeployCost();
 			UpdateResources();
 		}
@@ -682,4 +745,95 @@ static function XComGameState_Unit AddStrategyUnitToBoard(XComGameState_Unit Uni
 	`TACTICALRULES.SubmitGameState(NewGameState);
 
 	return Unit;
+}
+
+function RefreshRewardDecks()
+{
+	local X2StrategyElementTemplateManager StrMgr;
+	local array<X2StrategyElementTemplate> StrTemplates;
+	local X2StrategyElementTemplate Template;
+	local X2TechTemplate TechTemplate;
+
+	StrMgr = class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager();
+
+	StrTemplates = StrMgr.GetAllTemplatesOfClass(class'X2TechTemplate');
+
+	foreach StrTemplates(Template)
+	{
+		TechTemplate = X2TechTemplate(Template);
+		if (TechTemplate != none)
+		{
+			RefreshTechTemplate(TechTemplate.RewardDeck);
+		}
+	}
+}
+
+function RefreshTechTemplate(name DeckName)
+{
+	local X2CardManager CardStack;
+	local X2ItemTemplateManager ItemMgr;
+	local X2DataTemplate DataTemplate;
+	local X2ItemTemplate Template;
+	local array<string> Cards;
+	local string Card;
+
+	if (string(DeckName) == "")
+		return;
+
+	ItemMgr = class'X2ItemTemplateManager'.static.GetItemTemplateManager();
+	CardStack = class'X2CardManager'.static.GetCardManager();
+	`log("Checking deck " @ DeckName,, 'RewardDecksRefresh');
+
+	CardStack.GetAllCardsInDeck(DeckName, Cards);
+
+	foreach ItemMgr.IterateTemplates(DataTemplate, none)
+	{
+		Template = X2ItemTemplate(DataTemplate);
+		if (Template != none && Template.RewardDecks.Find(DeckName) != INDEX_NONE)
+		{
+			if (Cards.Find(string(Template.DataName)) != INDEX_NONE)
+			{
+				Cards.RemoveItem(string(Template.DataName));
+			}
+			else
+			{
+				CardStack.AddCardToDeck(DeckName, string(Template.DataName));
+				`log(Template.DataName @ "not found in deck, adding to deck",, 'RewardDecksRefresh');
+			}
+		}
+	}
+
+	foreach Cards(Card)
+	{
+		CardStack.RemoveCardFromDeck(DeckName, Card);
+		`log(Card @ "not found in item templates, removing from deck",, 'RewardDecksRefresh');
+	}
+}
+
+function RefreshCanRankUp()
+{
+	local XComGameState_Unit UnitState;
+	local XComGameState_HeadquartersXCom XComHQ;
+			
+	XComHQ = XComGameState_HeadquartersXCom(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_HeadquartersXCom'));
+
+	if (XComHQ == none)
+	{
+		Button1.NeedsAttention(false);
+		return;
+	}
+
+	`log("Refreshing rank up notification",, 'WaveCOM');
+	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
+	{
+		if( (UnitState.GetTeam() == eTeam_XCom) && UnitState.IsAlive() && UnitState.IsASoldier() && XComHQ.Squad.Find('ObjectID', UnitState.GetReference().ObjectID) != INDEX_NONE && !UnitState.bRemovedFromPlay)
+		{
+			if (UnitState.ShowPromoteIcon())
+			{
+				Button1.NeedsAttention(true);
+				return;
+			}
+		}
+	}
+	Button1.NeedsAttention(false);
 }
