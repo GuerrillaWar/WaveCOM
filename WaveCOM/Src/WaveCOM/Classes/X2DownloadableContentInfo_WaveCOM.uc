@@ -23,6 +23,7 @@ struct DynamicUpgradeData
 	var int SupplyMax;
 	var int FirstIncrease;
 	var bool ScaleWithSquadSize;
+	var bool IgnoreDiscounts;
 };
 
 var config array<DynamicUpgradeData> RepeatableUpgradeCosts;
@@ -262,10 +263,10 @@ static function UpdateResearchTemplates ()
 	}
 }
 
-static function UpdateResearchCostDynamic (int SquadSize)
+static function UpdateResearchCostDynamic (int SquadSize, optional float ProvingGroundPercentDiscount = 0.00f)
 {
 	local XComGameState_Tech TechState;
-	local int UpgradeIndex, StackCount;
+	local int UpgradeIndex, StackCount, CostIncrease;
 	local DynamicUpgradeData CostData;
 	local X2TechTemplate Tech;
 	local XComGameStateHistory History;
@@ -294,7 +295,15 @@ static function UpdateResearchCostDynamic (int SquadSize)
 				if (StackCount > CostData.FirstIncrease)
 				{
 					StackCount = StackCount - CostData.FirstIncrease;
-					AddSupplyCost(Tech.Cost.ResourceCosts, Min(Round(CostData.SupplyIncrement * StackCount), CostData.SupplyMax));
+					CostIncrease = Min(Round(CostData.SupplyIncrement * StackCount), CostData.SupplyMax);
+					if (CostData.IgnoreDiscounts && ProvingGroundPercentDiscount > 0)
+					{
+						if (Tech.bProvingGround)
+						{
+							CostIncrease *= (100.0f / (100.0f - ProvingGroundPercentDiscount));
+						}
+					}
+					AddSupplyCost(Tech.Cost.ResourceCosts, CostIncrease);
 				}
 				class'X2StrategyElementTemplateManager'.static.GetStrategyElementTemplateManager().AddStrategyElementTemplate(Tech, true);
 			}
@@ -343,8 +352,6 @@ static function UpgradeItems(XComGameState NewGameState, XComGameState_Item Item
 	local XGItem ItemVisualizer;
 	local int idx, iSoldier, iItems;
 	local name CreatorTemplateName;
-	local XGUnit Visualizer;
-	local StateObjectReference UnitRef;
 
 	CreatorTemplateName = ItemState.GetMyTemplateName();
 
@@ -484,15 +491,6 @@ static function UpgradeItems(XComGameState NewGameState, XComGameState_Item Item
 					}
 				}
 			}
-			
-			//UnitRef = Soldiers[iSoldier].GetReference();
-			//if (Soldiers[iSoldier].IsAlive() && XComHQ.Squad.Find('ObjectID', UnitRef.ObjectID) != INDEX_NONE && !Soldiers[iSoldier].bRemovedFromPlay)
-			//{
-				//Visualizer = XGUnit(Soldiers[iSoldier].FindOrCreateVisualizer());
-				//Soldiers[iSoldier].SyncVisualizer(NewGameState);
-				//Visualizer.ApplyLoadoutFromGameState(Soldiers[iSoldier], NewGameState);
-				//class'WaveCOM_UIArmory_FieldLoadout'.static.UpdateUnitState(Soldiers[iSoldier].ObjectID, NewGameState);
-			//}
 		}
 
 		// Remove narratives to prevent problems

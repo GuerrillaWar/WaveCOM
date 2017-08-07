@@ -524,7 +524,8 @@ static function FullRefreshSoldier(StateObjectReference UnitRef)
 	local StateObjectReference AbilityReference;
 	local XComGameState_HeadquartersXCom XComHQ;
 	local int i;
-
+	
+	UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitRef.ObjectID));
 	EffectContext = class'WaveCOMGameStateContext_UpdateUnit'.static.CreateChangeStateUU("Clean Unit State", UnitState);
 	NewGameState = EffectContext.GetGameState();
 	UnitState = XComGameState_Unit(NewGameState.CreateStateObject(class'XComGameState_Unit', UnitRef.ObjectID));

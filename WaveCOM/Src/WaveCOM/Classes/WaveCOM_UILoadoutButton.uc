@@ -177,7 +177,6 @@ private function int UpdateDeployCost ()
 
 private function EventListenerReturn OnDeath(Object EventData, Object EventSource, XComGameState NewGameState, Name InEventID)
 {
-	UpdateResources();
 	UpdateDeployCost();
 	return ELR_NoInterrupt;
 }
@@ -212,7 +211,7 @@ private function EventListenerReturn UpdateTechCost(Object EventData, Object Eve
 	local XComGameState_Tech TechState;
 
 	NumSoldier = UpdateDeployCost();
-	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier);
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier, `XCOMHQ.ProvingGroundPercentDiscount);
 
 	// Refresh foreground
 	ProjectScreen = UISimpleCommodityScreen(TacHUDScreen.Movie.Stack.GetFirstInstanceOf(class'UIChooseProject'));
@@ -378,7 +377,7 @@ public function OpenResearchMenu(UIButton Button)
 	local int NumSoldier;
 	UpdateResources();
 	NumSoldier = UpdateDeployCost();
-	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier);
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier, `XCOMHQ.ProvingGroundPercentDiscount);
 	LoadedScreen = TacHUDScreen.Movie.Pres.Spawn(class'UIChooseResearch', TacHUDScreen.Movie.Pres);
 	TacHUDScreen.Movie.Stack.Push(LoadedScreen, TacHUDScreen.Movie);
 }
@@ -389,7 +388,7 @@ public function OpenProjectMenu(UIButton Button)
 	local int NumSoldier;
 	UpdateResources();
 	NumSoldier = UpdateDeployCost();
-	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier);
+	class'X2DownloadableContentInfo_WaveCOM'.static.UpdateResearchCostDynamic(NumSoldier, `XCOMHQ.ProvingGroundPercentDiscount);
 	LoadedScreen = TacHUDScreen.Movie.Pres.Spawn(class'UIChooseProject', TacHUDScreen.Movie.Pres);
 	TacHUDScreen.Movie.Stack.Push(LoadedScreen, TacHUDScreen.Movie);
 }
